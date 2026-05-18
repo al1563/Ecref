@@ -1,4 +1,4 @@
 .DS_Store
-
+.*
 # Local-only encryption helper — never deploy to GitHub Pages
 tools/
