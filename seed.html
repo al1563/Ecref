@@ -43,14 +43,24 @@
 
 <hr>
 
-<h2>2. Seed KV from this site's <code>reference_data.json</code></h2>
-<p><small class="muted">Replaces whatever's currently in KV with the contents of <code>reference_data.json</code> served by this site.</small></p>
-<label for="seedPw">Editor password</label>
+<h2>2. Seed KV</h2>
+<p><small class="muted">Replaces whatever's currently in KV with the chosen source. Two options:</small></p>
+<label for="seedPw">Editor password (used for both)</label>
 <input type="password" id="seedPw" autocomplete="off">
+
+<h3 style="margin-top:1rem;font-size:1rem;">Option A — Seed from this site's <code>reference_data.json</code></h3>
 <div class="actions">
   <button id="seedBtn">Seed from reference_data.json</button>
 </div>
 <div id="seedStatus"></div>
+
+<h3 style="margin-top:1.5rem;font-size:1rem;">Option B — Seed from an uploaded JSON file</h3>
+<p><small class="muted">Pick a <code>reference_data.json</code> or a previously-downloaded backup. Must be <code>{"database": [...]}</code>.</small></p>
+<input type="file" id="uploadFile" accept=".json,application/json">
+<div class="actions">
+  <button id="uploadSeedBtn">Seed from uploaded file</button>
+</div>
+<div id="uploadStatus"></div>
 
 <hr>
 
@@ -134,6 +144,46 @@ $('seedBtn').addEventListener('click', async () => {
   } finally {
     $('seedBtn').disabled = false;
     $('seedBtn').textContent = 'Seed from reference_data.json';
+  }
+});
+
+$('uploadSeedBtn').addEventListener('click', async () => {
+  const s = $('uploadStatus');
+  s.className = ''; s.textContent = '';
+  const pw = $('seedPw').value;
+  const file = $('uploadFile').files[0];
+  if (!pw) { s.className = 'err'; s.textContent = 'Enter the editor password.'; return; }
+  if (!file) { s.className = 'err'; s.textContent = 'Pick a JSON file first.'; return; }
+
+  // Confirm before clobbering KV
+  const sizeKb = Math.round(file.size / 1024);
+  if (!confirm(`Replace all entries in KV with the contents of "${file.name}" (${sizeKb} KB)? This cannot be undone.`)) return;
+
+  const btn = $('uploadSeedBtn');
+  btn.disabled = true;
+  btn.textContent = 'Seeding...';
+  try {
+    const text = await file.text();
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch (e) { throw new Error('File is not valid JSON: ' + e.message); }
+    if (!parsed.database || !Array.isArray(parsed.database)) {
+      throw new Error('File must contain { "database": [...] }');
+    }
+    const r = await fetch('/api/seed', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ database: parsed.database }),
+    });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error || `HTTP ${r.status}`);
+    s.className = 'ok';
+    s.textContent = `✓ Seeded ${result.count} entries from "${file.name}" into KV.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `Failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Seed from uploaded file';
   }
 });
 
