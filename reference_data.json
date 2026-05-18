@@ -937,14 +937,14 @@
     },
     {
       "id": "colon-cancer-screening-1-2-sessile-serrated-polyp-10mm-witho",
-      "data": "colon cancer screening - 1-2 sessile serrated polyp < 10mm without dysplasia = 5-10 years - 3-4 polyp = 3-5 years - 4+ = 3 years - <20 <10mm hyperplastic polyp also 10 years",
+      "data": "colon cancer screening\n- 1-2 sessile serrated polyp < 10mm without dysplasia = 5-10 years - 3-4 polyp = 3-5 years - 4+ = 3 years - <20 <10mm hyperplastic polyp also 10 years",
       "template": "",
       "imgs": "",
       "category": "Heme/Onc",
       "tags": [],
       "links": [],
       "createdAt": "2026-05-01T00:00:00.000Z",
-      "updatedAt": "2026-05-01T00:00:00.000Z"
+      "updatedAt": "2026-05-18T20:12:47.000Z"
     },
     {
       "id": "colorectal-cancer-prevention-baby-aspirin-helps-if-fam-hx-st",
@@ -1047,14 +1047,14 @@
     },
     {
       "id": "covid-sx-fever-chills-cough-sob-fatigue-muscle-ache-headache",
-      "data": "COVID - Sx: fever, chills, cough, SOB, fatigue, muscle ache, headache, loss taste smell, sore throat, congestion/runny nose, nausea, vomiting, diarrhea - no paxlovid if on statin (can stop statin) - paxlovid or molnupiravir if mild to moderate - classification: mild = no SOB, but other symptoms, moderate = evidence of lower respiratory disease clinically or imaging SpO2 94+%, severe = <94% or PaO2/FiO2<300mmHg, RR>30, or lung infiltrate >50%; critical = respiratory failure, shock remdesivir: - mild to moderate with risk to severe (3 day course if non-COVID diagnosis and incidentally COVID+) - onset <=7 days and either: >60, HTN, stroke/CAD, DM, BMI 30+, immunocompromised, GFR<60, cancer, chronic liver or lung disease, sickle cell, CF, dementia, smoking, TB - remdesivir 200mg IVP x1, 100mg IVP day 2 and 3 - severe COVID - SpO2 <=94% - remdesivir 200mg IVP x1, 100mg IVP day 2-4 Paxlovid if GFR 60+ = nirmatrelvir 300mg (2 tab) + ritonavir 100mg (1 tab) q12h x5 days 30-60 = nirmatrelvir 150 mg +  ritonavir 100mg paxlovid interactions meds: ranolazine, amio, dofetilide, flecanide, placix, rivaroxavan, ticagrelor, cabamazepine, colchicine, rifampin, st. john's wort, lovastatin, simvastatin, sildenalfil, midazolam If hypoxic, add on dexamethasone 6mg daily - and daily d-dimer ,CRP, LDH, troponin, ferritin, CBC w/ diff q48 hrs (severity labs) - decadron 6mg Tocilizumab: for patients with high oxygen needs with COVID",
+      "data": "COVID\n- Sx: fever, chills, cough, SOB, fatigue, muscle ache, headache, loss taste smell, sore throat, congestion/runny nose, nausea, vomiting, diarrhea - no paxlovid if on statin (can stop statin) - paxlovid or molnupiravir if mild to moderate - classification: mild = no SOB, but other symptoms, moderate = evidence of lower respiratory disease clinically or imaging SpO2 94+%, severe = <94% or PaO2/FiO2<300mmHg, RR>30, or lung infiltrate >50%; critical = respiratory failure, shock remdesivir: - mild to moderate with risk to severe (3 day course if non-COVID diagnosis and incidentally COVID+) - onset <=7 days and either: >60, HTN, stroke/CAD, DM, BMI 30+, immunocompromised, GFR<60, cancer, chronic liver or lung disease, sickle cell, CF, dementia, smoking, TB - remdesivir 200mg IVP x1, 100mg IVP day 2 and 3 - severe COVID - SpO2 <=94% - remdesivir 200mg IVP x1, 100mg IVP day 2-4 Paxlovid if GFR 60+ = nirmatrelvir 300mg (2 tab) + ritonavir 100mg (1 tab) q12h x5 days 30-60 = nirmatrelvir 150 mg +  ritonavir 100mg paxlovid interactions meds: ranolazine, amio, dofetilide, flecanide, placix, rivaroxavan, ticagrelor, cabamazepine, colchicine, rifampin, st. john's wort, lovastatin, simvastatin, sildenalfil, midazolam If hypoxic, add on dexamethasone 6mg daily - and daily d-dimer ,CRP, LDH, troponin, ferritin, CBC w/ diff q48 hrs (severity labs) - decadron 6mg Tocilizumab: for patients with high oxygen needs with COVID",
       "template": "#COVID positive: Typical course for COVID will start with Dyspnea at 6 days post exposure. COVID Severity Labs: ESR ***, CRP ***, Procalcitonin ***, LDH ***, Prothrombin Time ***, D-Dimer ***, Fibrinogen ***, Ferritin ***, Interleukin 6 ***, Troponin I ***. Risk factors: Age >65, HTN on medication, DM on treatment, COPD on treatment, history of asthma, CAD on treatment, ESRD, obesity BMI >30, absolute lymphocytes <0.8, ferritin > 800, D-dimer >1000, CRP > 10,  bilateral viral PNA on CXR. Patients with TSH, lipid, A1c, Vit D abnormalities are at higher risk {inpatient admission for severe dyspnea, oxygen sat of <90% on RA, signs of end organ damage} #Acute Hypoxic Respiratory Failure #SIRS Positive based on *** {suspected infection + tachycardia, leukocytosis, RR, + organ damage = sepsis, + pressors = Septic Shock} #COVID Infection: Prediction for ICU Admission or Ventilatory Support: ***% (Source: http://covidrisk.hs.uci.edu/, modeled from 87 patients) - Satting ***% on *** - Admit to tele - Started on Remdesivir (GFR >30) (**) for 5 days and Dexamethasone 6mg {any oxygen} (***) for 10 days - Consider Paxlovid or Xevudy if available vs tocilizumab or baricitinib (mortality benefit), will talk to pharmacy - Consider Lasix spot dosing if increasing oxygen requirements with goal of -500ml to -1L - Symptomatic Control: Benzonatate PRN, Guanifenesin PRN, Tylenol PRN, Melatonin qHS, inhalers q4hrs, Chest Physiotherapy QID - Empiric antibiotics for pneumonia if suspected (low threshold)-- azithromycin (x 5 days) plus ceftriaxone (MRSA nares***), discontinue ceftriaxone in 48 hours if no evidence of bacterial infection. - Blood cultures, lactate, Sputum gram stain and culture, Urine legionella, LFTs - COVID severity labs q48 hours - Contact and droplet precautions; encourage incentive spirometry, encourage proning - Low threshhold for intubation in setting of rising oxygen requirement - Target O2 saturation of 92-96% - DVT prophylaxis and continue unless platelets < 30 given procoagulable form of DIC despite low platelet count in COVID patients",
       "imgs": "images/covid19 severity.png",
       "category": "Cardiac",
       "tags": [],
       "links": [],
       "createdAt": "2026-05-01T00:00:00.000Z",
-      "updatedAt": "2026-05-01T00:00:00.000Z"
+      "updatedAt": "2026-05-18T20:12:47.000Z"
     },
     {
       "id": "cpk-myositis-statin-induced-hypothyroidism-delayed-deep-tend",
@@ -1278,14 +1278,14 @@
     },
     {
       "id": "diabetes-type-1-diabetes-mellitus-one-or-more-autoantibodies",
-      "data": "diabetes - type 1 diabetes mellitus, one or more autoantibodies directed at the following targets are typically present: GAD, tyrosine phosphatases IA-2 and IA-2=CE=B2, islet cells, insulin, and zinc transporter 8 - 1st order GAD  (glutamic acid decarboxylase) antibody testing is negative, it should be followed by tyrosine phosphatase IA-2 and/or zinc transporter 8 testing diabetic neuropathy - use gabapentin/lyrica, duloxetine to treat; 8% capsaicin patch if feet also.",
+      "data": "diabetes\ntype 1 diabetes mellitus, one or more autoantibodies directed at the following targets are typically present: GAD, tyrosine phosphatases IA-2 and IA-2=CE=B2, islet cells, insulin, and zinc transporter 8 - 1st order GAD  (glutamic acid decarboxylase) antibody testing is negative, it should be followed by tyrosine phosphatase IA-2 and/or zinc transporter 8 testing diabetic neuropathy - use gabapentin/lyrica, duloxetine to treat; 8% capsaicin patch if feet also.",
       "template": "#diabetes: A1C of *** (date) Consider metformin on discharge given benefits in weight loss, lipid improvement, prediabetic <60 and obese. Avoid if ongoing diarrhea. Contraindications include severe renal dysfunction (eGFR <30 mL/minute/1.73 m2); acute or chronic metabolic acidosis with or without coma (including diabetic ketoacidosis). Counsel that there is a tachyphylaxis effect and that this will minimize with time and with food. - Evaluate for B12 df - lactic acid Consider GLP-1 on discharge as it reduces CKD progression and provides ASCVD benefit and helps with weight loss. Avoid if medullary thyroid cancer, hx of pancreatitis, or gallbladder / biliary disease (preferred if A1C >9%) Consider SGLT2 inhibitors on discharge as it decreases heart failure hospitalization, nephropathy, and helps with weight loss. Do not initiate in AKI, contraindicated in those with GFR <40-45, those with history of candida infections, or fournier's gangrene. Avoid canagliflozin in diabetics with PAD given increase in amputations. Avoid dapgliflozin in those with bladder cancer. - Diabetic educator - Home diabetic supplies (order placed) - Given new onset diabetes and A1C of <8% will initiate Metformin / >9% (or after 3 mo of metformin) will initiate dual therapy ( metformin + Insulin/oral)  / if still uncontrolled=E2=80=A6. Triple therapy (metformin + GLP-1 receptor agonist + insulin) / >10% = insulin (or glucose of 300 or higher) - Consider pramlintide (amylin analogue) as adjunctive therapy for T1DM - Given concern for T1DM: screen with GAD 65, Zinc, and IA-2 autoantibodies",
       "imgs": "",
-      "category": "Neuro",
+      "category": "Endo",
       "tags": [],
       "links": [],
       "createdAt": "2026-05-01T00:00:00.000Z",
-      "updatedAt": "2026-05-01T00:00:00.000Z"
+      "updatedAt": "2026-05-18T20:12:47.000Z"
     },
     {
       "id": "diabetes-ketosis-prone-diabetes",
@@ -1322,14 +1322,14 @@
     },
     {
       "id": "diarrhea-labs-if-fever-ibd-food-handler-healthcare-70-yrs-he",
-      "data": "diarrhea - labs if fever, IBD, food handler/healthcare, >70 yrs, heart disease, >6 stools/day, severe abd pain: Bcx, Cdiff,PCR testing, HIV if young,  parasite/ova  ; fecal calprotectin, fecal elastase (pancreas) - Tx: if fever and doing bad, can do azithromycin or fluoroquinolone - STEC/EHEC, don't treat with antibiotics due to shiga-like toxin - Shigella: can actually treat - Tx: can give loperamide and bismuth (loperamide slightly better) if too much  (but don't give loperamide  if fever or blood in stool - can increase chance of toxic megacolon in cdiff) - azithromycin/cipro for ETEC diarrhea - juice (high in fructose) worsens viral gastroenteritis because GI not absorb fructose = causes osmotic diarrhea; instead give electrolyte fluid hydration oral hydration and small amount of glucose (hypo-osmolar); just eat normal diet - limit sugar and fat - can calculate osmotic gap 290- 2(stoolNa + stoolK) - <50 = secretory = infection (GI electrolyte transport messed up, lots of Na and K in stool) - >125 = osmotic (stomach not absorbing stuff) giardiasis - Sx: oily stool, from dirty water - double nuclei - Tx: tinidazole C diff - vancomycin 125mg QID PO for 10 days  for severe (alb <3 and (WBC > 15k or abd tender)  ; fidaxomicin if not responding to vanc - metronidazole PO 500 TID for mild-mod - complicated = If very severe, vanc 500mg QID + IV flagyl 500 q6h. SIBO - small intestinal bacterial overgrowth. Bloating, lots of farting, and chronic watery diarrhea.  Just GI bacteria overgrowth. Dx with carbohydrate breath test (if hydrogen high, then = bacteria fermenting). Tx: oral antibiotic rifaximin/ciprofloxacin for gram-negative GI organisms and diet modification.  Folate will be high and vitamin B12 will be low. chronic diarrha: - seretory diarrhea = large volume watery, also night time, unchanged by fasting  (290-2NaK) if > 100 = osmotic, if < 50 = secretory osmotic: not nocturnal, most likely lactase deficiency.  happens with eating. - Dx: colonscopy and biopsy for microscopic colitis  (common in women 45-60, with nocturnal diarrhea; stop NSAID, PPI) -  high fecal calprotein for IBD, urine stool laxative sreen, low fecal elastase level for chronic pancreatitis, fecal fat for steatorrhea (celiac SIBO, short bowel, pancreatic insufficiency), stool gap (stool Na, K) microscopic colitis: - age 45-60 women: - stop NSAID, SSRI, PPI - Dx: colonoscopy biopsy is normal Tx with loperamide, bismuth for diarrhea. budesonide to help also.",
+      "data": "diarrhea\nlabs if fever, IBD, food handler/healthcare, >70 yrs, heart disease, >6 stools/day, severe abd pain: Bcx, Cdiff,PCR testing, HIV if young,  parasite/ova  ; fecal calprotectin, fecal elastase (pancreas) - Tx: if fever and doing bad, can do azithromycin or fluoroquinolone - STEC/EHEC, don't treat with antibiotics due to shiga-like toxin - Shigella: can actually treat - Tx: can give loperamide and bismuth (loperamide slightly better) if too much  (but don't give loperamide  if fever or blood in stool - can increase chance of toxic megacolon in cdiff) - azithromycin/cipro for ETEC diarrhea - juice (high in fructose) worsens viral gastroenteritis because GI not absorb fructose = causes osmotic diarrhea; instead give electrolyte fluid hydration oral hydration and small amount of glucose (hypo-osmolar); just eat normal diet - limit sugar and fat - can calculate osmotic gap 290- 2(stoolNa + stoolK) - <50 = secretory = infection (GI electrolyte transport messed up, lots of Na and K in stool) - >125 = osmotic (stomach not absorbing stuff) giardiasis - Sx: oily stool, from dirty water - double nuclei - Tx: tinidazole C diff - vancomycin 125mg QID PO for 10 days  for severe (alb <3 and (WBC > 15k or abd tender)  ; fidaxomicin if not responding to vanc - metronidazole PO 500 TID for mild-mod - complicated = If very severe, vanc 500mg QID + IV flagyl 500 q6h. SIBO - small intestinal bacterial overgrowth. Bloating, lots of farting, and chronic watery diarrhea.  Just GI bacteria overgrowth. Dx with carbohydrate breath test (if hydrogen high, then = bacteria fermenting). Tx: oral antibiotic rifaximin/ciprofloxacin for gram-negative GI organisms and diet modification.  Folate will be high and vitamin B12 will be low. chronic diarrha: - seretory diarrhea = large volume watery, also night time, unchanged by fasting  (290-2NaK) if > 100 = osmotic, if < 50 = secretory osmotic: not nocturnal, most likely lactase deficiency.  happens with eating. - Dx: colonscopy and biopsy for microscopic colitis  (common in women 45-60, with nocturnal diarrhea; stop NSAID, PPI) -  high fecal calprotein for IBD, urine stool laxative sreen, low fecal elastase level for chronic pancreatitis, fecal fat for steatorrhea (celiac SIBO, short bowel, pancreatic insufficiency), stool gap (stool Na, K) microscopic colitis: - age 45-60 women: - stop NSAID, SSRI, PPI - Dx: colonoscopy biopsy is normal Tx with loperamide, bismuth for diarrhea. budesonide to help also.",
       "template": "#acute on chronic diarrhea:  <4 weeks in duration. Likely infectious though could be early fungal infection as well. Likely small bowel etiology given watery, large volume, with cramping / bloating // large bowel given small volume, painful, fever, and blood, and mucus. Exposure includes travel, antibiotics, recent hospitalization, food, sick contacts, day care, immunocompromise. Most often viral etiology -- norovirus (less likely given not wintertime) vs rotavirus vs adenovirus. Could be bacterial, though often severe, but cannot rule out in setting of immunocompromise -- E. Coli, campylobacter, salmonella, shigella, C. Diff. Parastici includes giardia, cryptosporidia, cyclospora, e. Histolytics. In immunocompromised will evaluate for CMV, C. Diff, cryptosporidia, isospora, microsporidium, MAC, TB, histo, and cryptococcus - Defer antibiotics given patient is not febrile -- if develops sepsis or signs of inflammatory diarrhea can consider fluoroquinolone vs azithromycin Avoid loperamide for infectious causes, can use pepto as alternative - Blood cultures - Stool culture - C. Diff - CMV - Beta D glucan - Biofire GI If chronic -- work up for secretory, osmotic, functional, malabsorptive, and inflammatory in etiology. - CBC, BMP, ESR, CRP - TSH, - Stool lytes (Na, K pH) - Fecal WBC, calprotectin, fecal fat, lactoferrin, FOBT. - 290 - 2 X (Na + K) -- - If >50-- evaluate for lactose intolerance,  sorbitol, antacids, medication, celiac, SIBO - stool pH < 6 consider carbohydrate malabsorption - If <50 -- evaluate for secretory etiologies: infectious, non-osmotic laxative, microscopic colitis, alcoholism, hyperthyroidism, bile salt malabsorption, medication - If fecal fat positive consider malabsorption such as Celiac or maldigestion (chronic pancreatitis, SIBO, cirrhosis) - Consider celiac disease in setting of weight loss and abdominal pain - IgA, IgA anti ttG, HLADQ2, IgA endomysial - If inflammatory -- consider IBD, ischemia, infection, radiation, or neoplasm. ---------------------------------- Exposures: Food Hx (raw, undercooked meat/fish), residence, occupational exposure, travel, pets/anmials, hobbies, recent abx Characteristics: duration (acute <3 wks),  frequency, fever, blood, mucus, abdominal pain, bloating/gas/dyspepsia, relationship to food, weight loss, family w/ similar Sx Chronic diarrhea (>3 wks): -Watery (secretory vs osmotic vs functional) -Fatty (malabsoptive vs maldigestive) -Inflammatory Osmotic diarrhea improves with fasting, secretory diarrhea does not. Stool osmotic gap =  290  =E2=80=93 2x(stool Na + stool K). Used to distinguish secretory vs osmotic. -Secretory (stool osm gap <50): infectious, non-osmotic laxative, microscopic colitis, alcoholism, hyperthyroidism, bile salt malabsorption, medication -Osmotic (stool osm gap >125): lactose intolerance, sorbitol, antacids, medication, celiac, SIBO DDx: Infectious, celiac disease, SIBO, food intolerance, microscopic colitis, bile salt malabsorption, pancreatic insufficiency, IBD, IBS #Diarrhea We discussed at length potential therapies such as a low FODMAP diet, IBgard, fiber supplements, probiotics, and prebiotics. In addition, she was advised to try levsin SL PRN for bloating and cramping as well as immodium PRN to control diarrhea symptoms. The DDx also includes celiac disease, food intolerance, microscopic colitis, SIBO, infection (e.g. Cdiff), bile acid diarrhea, and pancreatic insufficiency. Thus, we will have ordered tests accordingly (outlined below). RECOMMENDATIONS -TTG IgA and Total IgA to evaluate for celiac disease -SIBO Breath test -Stool studies: Fecal elastase, Fecal calprotectin, Cdiff -Low FODMAP diet -Start Fiber supplements (We discussed fibersource, benefiber, metaucil, citrucel, fibercon) -Trial of Pro-biotics -Trial of Pre-biotic sugars (inulin) -Loperamide PRN -IBgard -Levsin sublingual 0.125mg q4h PRN for bloating/cramping -Immodium PRN -Consider colonoscopy with random biopsies for microscopic colitis -Consider cholestyramine, pancreatic enzymes (30K units TID), Abx -RTC 3 months",
       "imgs": "",
-      "category": "Pulmonary",
+      "category": "GI",
       "tags": [],
       "links": [],
       "createdAt": "2026-05-01T00:00:00.000Z",
-      "updatedAt": "2026-05-01T00:00:00.000Z"
+      "updatedAt": "2026-05-18T20:12:47.000Z"
     },
     {
       "id": "diltiazem-verapamil-do-not-give-in-hfref-pt",
@@ -3346,14 +3346,14 @@
     },
     {
       "id": "ppi-aspiration-ppx-when-undergoing-anesthesia-nsaid-ulcer-cr",
-      "data": "PPI - aspiration ppx when undergoing anesthesia - NSAID ulcer - critically ill patients - upper GI bleed PPI prophylaxis - patients intubated > 48 hrs - plt < 50, INR > 1.5, or PTT 2x baseline - GI bleed or ulcer in past year - major trauma with injury severity score 16+ - burn >=35% - head injury GCS <=10 and inability to follow simple commands - spinal cord injury - partial hepatectomy - solid organ transplant periop in ICU - 2 antiplts (placix, aspirin, ticagerlo, cilostazol, dipyridamole - 2 of sepsis, ICU stay > 7 days, occult bleeding more than 6 days, or (high steroid >250mg hydrocotrisone, 50mg methylpred, 60mg prednisone, 10mg dexamethasone), enteral feeding hlh",
+      "data": "PPI\n- aspiration ppx when undergoing anesthesia \n- NSAID ulcer \n- critically ill patients \n- upper GI bleed PPI prophylaxis \n- patients intubated > 48 hrs \n- plt < 50, INR > 1.5, or PTT 2x baseline \n- GI bleed or ulcer in past year \n- major trauma with injury severity score 16+ \n- burn >=35% - head injury GCS <=10 and inability to follow simple commands \n- spinal cord injury - partial hepatectomy \n- solid organ transplant periop in ICU \n- 2 antiplts (placix, aspirin, ticagerlo, cilostazol, dipyridamole \n- 2 of sepsis, ICU stay > 7 days, occult bleeding more than 6 days, or (high steroid >250mg hydrocotrisone, 50mg methylpred, 60mg prednisone, 10mg dexamethasone), enteral feeding hlh",
       "template": "",
       "imgs": "",
       "category": "GI",
       "tags": [],
       "links": [],
       "createdAt": "2026-05-01T00:00:00.000Z",
-      "updatedAt": "2026-05-01T00:00:00.000Z"
+      "updatedAt": "2026-05-18T20:12:47.000Z"
     },
     {
       "id": "pregnant-outpt-tdap-27-36-weeks-each-pregnancy-24-28-weeks-2",
@@ -4808,17 +4808,6 @@
       "updatedAt": "2026-05-01T00:00:00.000Z"
     },
     {
-      "id": "condition-name-and-description-7",
-      "data": "Condition name and description",
-      "template": "",
-      "imgs": "",
-      "category": "Other",
-      "tags": [],
-      "links": [],
-      "createdAt": "2026-05-01T00:00:00.000Z",
-      "updatedAt": "2026-05-01T00:00:00.000Z"
-    },
-    {
       "id": "condition-name-and-description-8",
       "data": "Condition name and description",
       "template": "",
@@ -4850,6 +4839,17 @@
       "links": [],
       "createdAt": "2026-05-01T00:00:00.000Z",
       "updatedAt": "2026-05-01T00:00:00.000Z"
+    },
+    {
+      "id": "Lung Transplant Evaluation",
+      "data": "Lung Transplant Eval",
+      "template": "consider lung transplant for advanced lung disease with progressive decline despite maximal therapy (e.g. COPD, ILD/ idiopathic pulmonary fibrosis, CF/bronchiectasis, PAH)",
+      "imgs": "",
+      "category": "Pulmonary",
+      "tags": [],
+      "links": [],
+      "createdAt": "2026-05-18T20:12:47.000Z",
+      "updatedAt": "2026-05-18T20:12:47.000Z"
     }
   ]
 }

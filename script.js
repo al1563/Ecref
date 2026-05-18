@@ -11,7 +11,11 @@ const SECRETS = {
     "iv": "8Gmbx3N7t1c88wYB",
     "salt": "BzNNnuhOGajtk13s2pU5zA=="
   },
-  "patientsSheetUrl": null
+  "patientsSheetUrl": {
+    "ct": "RnmvlZw+bQ3pQDjTbwBqX08Eb2TaFIg49LljU/OJJmNqu0aJ5q5CpLr7uRSSlkTEBwnAU/vVN3jNYcATmfAGw5OMjcm+jo7TiHc8V31eCCWOduC8hUGGQfLdjHMQQeSFRwGIlckJo43SgQTyxfiOjf/fCNw=",
+    "iv": "1Yr9FGeE1TzNGBnC",
+    "salt": "g7GMdxWiS0LyVellK2qDPQ=="
+  }
 };
 const PBKDF2_ITER = 200000;
 
@@ -757,8 +761,9 @@ function renderDotphrases() {
 // =========================================================================
 
 const EDITOR_STORAGE = {
-    pat: 'ecref.editor.pat',         // encrypted PAT blob
+    pat: 'ecref.editor.pat',         // encrypted PAT blob (localStorage, GitHub mode)
     repo: 'ecref.editor.repo',       // {owner, repo} JSON if user overrides auto-detect
+    apiPassword: 'ecref.editor.apipw', // plain editor password (sessionStorage, API mode)
 };
 
 const EDITOR_STATE = {
@@ -839,6 +844,14 @@ function initEditor() {
     EDITOR_STATE.configured = EDITOR_STATE.mode === 'api'
         || !!localStorage.getItem(EDITOR_STORAGE.pat);
 
+    // Restore API password from sessionStorage if we set it earlier this tab session.
+    if (EDITOR_STATE.mode === 'api') {
+        try {
+            const stored = sessionStorage.getItem(EDITOR_STORAGE.apiPassword);
+            if (stored) EDITOR_STATE.apiPassword = stored;
+        } catch (e) { /* private mode etc. — ignore */ }
+    }
+
     // Bootstrap modal instances
     if (window.bootstrap) {
         EDITOR_STATE.setupModal = new bootstrap.Modal(document.getElementById('setupModal'));
@@ -862,11 +875,12 @@ function initEditor() {
     });
     document.getElementById('kbEditorMenu')?.addEventListener('click', () => {
         if (EDITOR_STATE.mode === 'api') {
-            // API mode: offer to clear the in-memory password (forces re-prompt)
+            // API mode: offer to clear the cached password (forces re-prompt)
             if (EDITOR_STATE.apiPassword) {
-                if (confirm('Clear the editor password from memory? You will be prompted again on next edit.')) {
+                if (confirm('Clear the editor password? You will be prompted again on next edit.')) {
                     EDITOR_STATE.apiPassword = null;
-                    toast('Editor password cleared from memory.', 'info');
+                    try { sessionStorage.removeItem(EDITOR_STORAGE.apiPassword); } catch (e) { /* ignore */ }
+                    toast('Editor password cleared.', 'info');
                 }
             } else {
                 toast('API mode: password is set in Vercel env var EDITOR_PASSWORD. Click Add Entry to enter it.', 'info', { duration: 5000 });
@@ -1121,6 +1135,7 @@ async function unlockPatFromModal() {
             }
             // Any other status (404, 200) means auth was accepted
             EDITOR_STATE.apiPassword = pw;
+            try { sessionStorage.setItem(EDITOR_STORAGE.apiPassword, pw); } catch (e) { /* ignore */ }
             document.getElementById('unlockPasswordInput').value = '';
             EDITOR_STATE.unlockModal?.hide();
             const next = EDITOR_STATE.pendingActionAfterUnlock;
@@ -1524,6 +1539,7 @@ async function saveEntry() {
             });
             if (r.status === 401) {
                 EDITOR_STATE.apiPassword = null;
+                try { sessionStorage.removeItem(EDITOR_STORAGE.apiPassword); } catch (e) { /* ignore */ }
                 throw new Error('Editor password rejected. Click save again to re-enter.');
             }
             if (!r.ok) {
@@ -1589,6 +1605,7 @@ async function deleteEntry(entry) {
             });
             if (r.status === 401) {
                 EDITOR_STATE.apiPassword = null;
+                try { sessionStorage.removeItem(EDITOR_STORAGE.apiPassword); } catch (e) { /* ignore */ }
                 throw new Error('Editor password rejected.');
             }
             if (!r.ok && r.status !== 404) {
@@ -1670,32 +1687,56 @@ function initHandbook(bust) {
         renderHandbook();
     });
 
-    // Delegated click on TOC entries — load inline instead of opening new tab
+    // Delegated click on TOC entries — render page images inline
     document.getElementById('handbookContent')?.addEventListener('click', e => {
-        const link = e.target.closest('[data-entry-href]');
+        const link = e.target.closest('[data-entry-id]');
         if (!link) return;
         e.preventDefault();
-        loadHandbookEntry(link.dataset.entryHref, link.dataset.entryTitle, link.dataset.entryId);
+        const entryId = link.dataset.entryId;
+        const [si, ei] = entryId.split('-').map(Number);
+        const sec = HANDBOOK_STATE.toc?.sections?.[si];
+        const entry = sec?.entries?.[ei];
+        if (entry) loadHandbookEntry(entry, entryId);
     });
 }
 
-function loadHandbookEntry(href, title, entryId) {
+function loadHandbookEntry(entry, entryId) {
     HANDBOOK_STATE.activeEntry = entryId;
-    const iframe = document.getElementById('handbookViewer');
+    const viewer = document.getElementById('handbookViewer');
     const placeholder = document.getElementById('handbookViewerPlaceholder');
     const titleEl = document.getElementById('handbookViewerTitle');
     const actions = document.getElementById('handbookViewerActions');
-    const openNewTab = document.getElementById('handbookOpenNewTab');
+    const pagesLabel = document.getElementById('handbookViewerPages');
+    const openPdf = document.getElementById('handbookOpenPdf');
+    const toc = HANDBOOK_STATE.toc;
 
-    iframe.src = href;
-    iframe.style.display = 'block';
+    const start = Number(entry.page) || 1;
+    const end = Number(entry.pageEnd) || start;
+    const tmpl = toc?.pageImagePath || 'docs/mgh-pages/page-{n:03d}.jpg';
+    const pdfPath = toc?.pdfPath || 'docs/MGH-2526-handbook.pdf';
+
+    // Build the image stack
+    let html = '';
+    for (let n = start; n <= end; n++) {
+        const src = tmpl.replace('{n:03d}', String(n).padStart(3, '0'));
+        const eager = (n === start) ? 'eager' : 'lazy';
+        html += `<figure class="handbook-page">
+            <img src="${escapeHtml(src)}" alt="Page ${n}" loading="${eager}" decoding="async">
+            <figcaption>p.${n}</figcaption>
+        </figure>`;
+    }
+    viewer.innerHTML = html;
+    viewer.scrollTop = 0;
+    viewer.style.display = 'block';
     if (placeholder) placeholder.style.display = 'none';
-    titleEl.textContent = title;
+
+    titleEl.textContent = entry.title || '';
     titleEl.classList.remove('text-muted');
     actions.style.display = 'flex';
-    openNewTab.href = href;
+    pagesLabel.textContent = (start === end) ? `p.${start}` : `p.${start}–${end}`;
+    openPdf.href = `${pdfPath}#page=${start}`;
 
-    // Mark active entry in the TOC
+    // Highlight active entry in TOC
     document.querySelectorAll('.handbook-entry.active').forEach(el => el.classList.remove('active'));
     const el = document.querySelector(`[data-entry-id="${CSS.escape(entryId)}"]`);
     if (el) el.classList.add('active');

@@ -619,12 +619,13 @@
                 <div class="handbook-viewer-header">
                     <span id="handbookViewerTitle" class="handbook-viewer-title text-muted">Select an entry to view</span>
                     <div class="handbook-viewer-actions" id="handbookViewerActions" style="display:none;">
-                        <a id="handbookOpenNewTab" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Open in new tab">
-                            <i class="fas fa-external-link-alt"></i>
+                        <span id="handbookViewerPages" class="handbook-viewer-pages text-muted small me-2"></span>
+                        <a id="handbookOpenPdf" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Open full PDF">
+                            <i class="fas fa-file-pdf me-1"></i>PDF
                         </a>
                     </div>
                 </div>
-                <iframe id="handbookViewer" class="handbook-viewer-iframe" src="about:blank" title="MGH Pocket Medicine"></iframe>
+                <div id="handbookViewer" class="handbook-viewer-images"></div>
                 <div id="handbookViewerPlaceholder" class="handbook-viewer-placeholder">
                     <i class="fas fa-file-pdf"></i>
                     <p>Click any entry in the table of contents to load that section here.</p>
