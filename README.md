@@ -36,13 +36,15 @@ If the site is deployed on Vercel with KV configured, edits take effect **instan
 3. **Redeploy** (Settings → Deployments → … → Redeploy) so the new env vars take effect.
 
 4. **Seed the KV with the current knowledge base**
-   - Open `tools/seed-kv.html` locally (double-click).
-   - Site URL: your Vercel URL (e.g. `https://ecref.vercel.app`).
-   - Password: the `EDITOR_PASSWORD` you set above.
-   - File: pick `reference_data.json` from this repo.
-   - Click **Seed KV**. Should say "✓ Seeded 442 entries."
+   - Visit `https://your-vercel-url/seed.html`
+   - Click **Check /api/entries** — should say "KV reachable" (or "503 KV not configured" if step 1 was skipped).
+   - Enter your `EDITOR_PASSWORD` and click **Seed from reference_data.json**. Should say "✓ Seeded 442 entries."
 
-5. **Done.** Visit the Vercel site, click **+ Add entry** — the unlock modal will prompt for your editor password (one-time per browser session). Hit save and the entry is live immediately.
+5. **Done.** Go back to the main site, click **+ Add entry** — the unlock modal will prompt for your editor password (one-time per browser session). Hit save and the entry is live immediately.
+
+The `/seed.html` page also has:
+- **KV status check** — verify the API + KV are wired up
+- **Backup** — download the current KV contents as a JSON file (commit to repo as a snapshot)
 
 ### What "real-time" means
 

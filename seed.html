@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seed KV — Ecref admin</title>
+<style>
+  body { font-family: 'Segoe UI', system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 1rem; color: #1c2733; }
+  h1 { color: #0064a4; }
+  .warn { background: #fff3cd; border-left: 4px solid #ffc107; padding: 0.8rem 1rem; margin-bottom: 1.5rem; border-radius: 4px; }
+  label { display: block; margin-top: 1rem; font-weight: 600; }
+  input { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.95rem; box-sizing: border-box; }
+  button { margin-top: 1rem; padding: 10px 20px; background: #0064a4; color: white; border: 0; border-radius: 4px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #004e80; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  .err { color: #b40000; margin-top: 0.6rem; }
+  .ok { color: #1a7a1a; margin-top: 0.6rem; font-weight: 600; }
+  pre { background: #1e1e1e; color: #e6e6e6; padding: 0.8rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 1rem; }
+  .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  hr { margin: 2rem 0; border: 0; border-top: 1px solid #e5e9ee; }
+  small.muted { color: #888; }
+</style>
+</head>
+<body>
+
+<h1>Vercel KV admin</h1>
+
+<div class="warn">
+  Use this page after setting up Vercel KV. It runs same-origin so no CORS issues. Anyone who knows your <code>EDITOR_PASSWORD</code> can use these tools.
+</div>
+
+<h2>1. Check KV status</h2>
+<button id="checkBtn">Check /api/entries</button>
+<div id="checkStatus"></div>
+
+<hr>
+
+<h2>2. Seed KV from this site's <code>reference_data.json</code></h2>
+<p><small class="muted">Replaces whatever's currently in KV with the contents of <code>reference_data.json</code> served by this site.</small></p>
+<label for="seedPw">Editor password</label>
+<input type="password" id="seedPw" autocomplete="off">
+<div class="actions">
+  <button id="seedBtn">Seed from reference_data.json</button>
+</div>
+<div id="seedStatus"></div>
+
+<hr>
+
+<h2>3. Back up KV (download as JSON)</h2>
+<p><small class="muted">Saves the current KV contents to a JSON file you can commit to the repo as a snapshot.</small></p>
+<button id="backupBtn">Download backup</button>
+<div id="backupStatus"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+$('checkBtn').addEventListener('click', async () => {
+  const s = $('checkStatus');
+  s.className = ''; s.textContent = 'Checking...';
+  try {
+    const r = await fetch('/api/entries', { cache: 'no-store' });
+    if (r.status === 503) {
+      s.className = 'err';
+      s.innerHTML = '503 — KV not configured. Set up the Storage integration in Vercel and add EDITOR_PASSWORD env var first.';
+      return;
+    }
+    if (!r.ok) {
+      s.className = 'err'; s.textContent = `HTTP ${r.status}`;
+      return;
+    }
+    const data = await r.json();
+    s.className = 'ok';
+    s.textContent = `✓ KV reachable. Currently holds ${(data.database || []).length} entries.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `Failed: ${e.message}`;
+  }
+});
+
+$('seedBtn').addEventListener('click', async () => {
+  const s = $('seedStatus');
+  s.className = ''; s.textContent = '';
+  const pw = $('seedPw').value;
+  if (!pw) { s.className = 'err'; s.textContent = 'Enter the editor password.'; return; }
+  $('seedBtn').disabled = true;
+  $('seedBtn').textContent = 'Seeding...';
+  try {
+    const fr = await fetch('reference_data.json', { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`reference_data.json: HTTP ${fr.status}`);
+    const fileData = await fr.json();
+    if (!fileData.database || !Array.isArray(fileData.database)) {
+      throw new Error('reference_data.json must contain { database: [...] }');
+    }
+    const r = await fetch('/api/seed', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ database: fileData.database }),
+    });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error || `HTTP ${r.status}`);
+    s.className = 'ok';
+    s.textContent = `✓ Seeded ${result.count} entries into KV.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `Failed: ${e.message}`;
+  } finally {
+    $('seedBtn').disabled = false;
+    $('seedBtn').textContent = 'Seed from reference_data.json';
+  }
+});
+
+$('backupBtn').addEventListener('click', async () => {
+  const s = $('backupStatus');
+  s.className = ''; s.textContent = 'Fetching...';
+  try {
+    const r = await fetch('/api/entries', { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const today = new Date().toISOString().slice(0, 10);
+    a.download = `reference_data-backup-${today}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    s.className = 'ok';
+    s.textContent = `✓ Downloaded ${(data.database || []).length} entries.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `Failed: ${e.message}`;
+  }
+});
+</script>
+
+</body>
+</html>
