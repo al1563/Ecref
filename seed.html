@@ -29,6 +29,14 @@
   Use this page after setting up Vercel KV. It runs same-origin so no CORS issues. Anyone who knows your <code>EDITOR_PASSWORD</code> can use these tools.
 </div>
 
+<h2>0. Configuration health</h2>
+<p><small class="muted">Shows which env vars the server can see. All boxes should be <code>true</code> for the corresponding feature to work.</small></p>
+<button id="healthBtn">Check /api/health</button>
+<div id="healthStatus"></div>
+<pre id="healthOut" hidden></pre>
+
+<hr>
+
 <h2>1. Check KV status</h2>
 <button id="checkBtn">Check /api/entries</button>
 <div id="checkStatus"></div>
@@ -53,6 +61,28 @@
 
 <script>
 const $ = id => document.getElementById(id);
+
+$('healthBtn').addEventListener('click', async () => {
+  const s = $('healthStatus');
+  const out = $('healthOut');
+  s.className = ''; s.textContent = 'Checking...';
+  out.hidden = true;
+  try {
+    const r = await fetch('/api/health', { cache: 'no-store' });
+    if (!r.ok) { s.className = 'err'; s.textContent = `HTTP ${r.status}`; return; }
+    const j = await r.json();
+    const parts = [];
+    parts.push(`KV: ${j.kv.configured ? '✓' : '✗ (missing env vars)'}`);
+    parts.push(`R2: ${j.r2.configured ? '✓' : '✗ (missing env vars)'}`);
+    parts.push(`EDITOR_PASSWORD: ${j.auth.EDITOR_PASSWORD ? '✓' : '✗'}`);
+    s.className = (j.kv.configured && j.r2.configured && j.auth.EDITOR_PASSWORD) ? 'ok' : 'err';
+    s.textContent = parts.join(' · ');
+    out.textContent = JSON.stringify(j, null, 2);
+    out.hidden = false;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `Failed: ${e.message}`;
+  }
+});
 
 $('checkBtn').addEventListener('click', async () => {
   const s = $('checkStatus');

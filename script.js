@@ -1385,8 +1385,10 @@ async function handleImageFiles(files) {
                     }),
                 });
                 if (r.status === 503) {
-                    // R2 not configured — fall back to GitHub queue
+                    // R2 not configured on the server — surface this loudly so the
+                    // user knows why image upload is silently queueing for GitHub.
                     EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
+                    toast('R2 not configured on the server (check /api/health). Image queued for GitHub commit instead.', 'error', { duration: 8000 });
                     await queueImageForGithub(file);
                     continue;
                 }
