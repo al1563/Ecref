@@ -1487,7 +1487,10 @@ function renderHandbook() {
             <ul class="handbook-entries">
                 ${sec.entries.map(e => {
                     const page = Number(e.page) || 1;
-                    const href = `${escapeHtml(pdfPath)}#page=${page}`;
+                    // Prefer chopped file if present; fall back to page anchor on full PDF
+                    const href = e.file
+                        ? escapeHtml(e.file)
+                        : `${escapeHtml(pdfPath)}#page=${page}`;
                     return `<li>
                         <a href="${href}" target="_blank" rel="noopener" class="handbook-entry">
                             <span class="handbook-entry-title">${escapeHtml(e.title || '')}</span>

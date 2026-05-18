@@ -1,76 +1,935 @@
 {
-  "pdfPath": "docs/mgh-handbook.pdf",
-  "subtitle": "Edit mgh-toc.json to match the page numbers in your copy. Each entry below is a placeholder — replace with the real chapters/sections of the MGH Pocket Medicine handbook.",
+  "pdfPath": "docs/MGH-2526-handbook.pdf",
+  "subtitle": "Auto-generated from PDF bookmarks. Links open the handbook at the corresponding page.",
   "sections": [
     {
       "title": "Cardiology",
       "entries": [
-        { "title": "ACLS algorithms", "page": 1 },
-        { "title": "Acute coronary syndromes (NSTEMI / STEMI)", "page": 1 },
-        { "title": "Heart failure", "page": 1 },
-        { "title": "Atrial fibrillation", "page": 1 },
-        { "title": "Valvular disease", "page": 1 }
+        {
+          "title": "ACLS Cardiac Arrest & TTM",
+          "page": 4
+        },
+        {
+          "title": "ACLS Bradycardia",
+          "page": 6
+        },
+        {
+          "title": "ACLS Tachycardia",
+          "page": 7
+        },
+        {
+          "title": "ACLS Defibrillation Cardioversion Pacing",
+          "page": 8
+        },
+        {
+          "title": "EKG Interpretation",
+          "page": 9
+        },
+        {
+          "title": "Narrow Complex Tachycardia",
+          "page": 11
+        },
+        {
+          "title": "Wide Complex Tachycardia",
+          "page": 12
+        },
+        {
+          "title": "AF AFL",
+          "page": 13
+        },
+        {
+          "title": "QTc",
+          "page": 15
+        },
+        {
+          "title": "Chest Pain",
+          "page": 16
+        },
+        {
+          "title": "Acute Coronary Syndrome",
+          "page": 17
+        },
+        {
+          "title": "MI complications 2025 LV CVR",
+          "page": 19
+        },
+        {
+          "title": "Cardiac Catheterization",
+          "page": 21
+        },
+        {
+          "title": "Noninvasive testing",
+          "page": 22
+        },
+        {
+          "title": "Echocardiography",
+          "page": 24
+        },
+        {
+          "title": "Heart Failure",
+          "page": 25
+        },
+        {
+          "title": "RV Failure",
+          "page": 28
+        },
+        {
+          "title": "WB MCS",
+          "page": 29
+        },
+        {
+          "title": "Pulmonary Artery Catheterization",
+          "page": 30
+        },
+        {
+          "title": "Cardiac Devices",
+          "page": 31
+        },
+        {
+          "title": "Valvular Heart Disease",
+          "page": 32
+        },
+        {
+          "title": "Pericardial Disease",
+          "page": 34
+        },
+        {
+          "title": "Aortic Disease",
+          "page": 35
+        },
+        {
+          "title": "Syncope",
+          "page": 37
+        },
+        {
+          "title": "Hypertensive Urgency Emergency",
+          "page": 38
+        },
+        {
+          "title": "PAD",
+          "page": 39
+        },
+        {
+          "title": "Anti-Arrhythmic Meds",
+          "page": 40
+        },
+        {
+          "title": "phys exam and telemetry",
+          "page": 41
+        }
       ]
     },
     {
-      "title": "Pulmonary",
+      "title": "Pulmonary and Critical Care",
       "entries": [
-        { "title": "Asthma exacerbation", "page": 1 },
-        { "title": "COPD exacerbation", "page": 1 },
-        { "title": "Pulmonary embolism", "page": 1 },
-        { "title": "ARDS", "page": 1 }
+        {
+          "title": "Respiratory Distress",
+          "page": 42
+        },
+        {
+          "title": "Hypoxemia & Hypercapnia",
+          "page": 43
+        },
+        {
+          "title": "Oxygen ^0 Non-Invasive Ventilation",
+          "page": 44
+        },
+        {
+          "title": "Chest Imaging 2025 NS",
+          "page": 45
+        },
+        {
+          "title": "PFTs and Asthma",
+          "page": 46
+        },
+        {
+          "title": "COPD",
+          "page": 47
+        },
+        {
+          "title": "Bronchiectasis & Hemoptysis",
+          "page": 48
+        },
+        {
+          "title": "ILD",
+          "page": 49
+        },
+        {
+          "title": "VTE Diagnostics",
+          "page": 50
+        },
+        {
+          "title": "VTE Management",
+          "page": 51
+        },
+        {
+          "title": "Pulmonary Hypertension",
+          "page": 52
+        },
+        {
+          "title": "Mechanical Ventilation",
+          "page": 53
+        },
+        {
+          "title": "ARDS",
+          "page": 55
+        },
+        {
+          "title": "ECMO",
+          "page": 57
+        },
+        {
+          "title": "Sedation",
+          "page": 58
+        },
+        {
+          "title": "Shock",
+          "page": 60
+        },
+        {
+          "title": "Sepsis",
+          "page": 61
+        },
+        {
+          "title": "Vasopressors",
+          "page": 63
+        },
+        {
+          "title": "Toxicology and Lung Transplant",
+          "page": 64
+        }
       ]
     },
     {
-      "title": "GI / Hepatology",
+      "title": "Gastroenterology",
       "entries": [
-        { "title": "GI bleeding", "page": 1 },
-        { "title": "Acute pancreatitis", "page": 1 },
-        { "title": "Cirrhosis & complications", "page": 1 },
-        { "title": "IBD", "page": 1 }
+        {
+          "title": "Upper GI Bleeding",
+          "page": 66
+        },
+        {
+          "title": "Lower GI Bleeding",
+          "page": 67
+        },
+        {
+          "title": "Abdominal Pain",
+          "page": 68
+        },
+        {
+          "title": "GERD PUD",
+          "page": 69
+        },
+        {
+          "title": "Nausea Vomiting",
+          "page": 70
+        },
+        {
+          "title": "Diarrhea",
+          "page": 72
+        },
+        {
+          "title": "Constipation",
+          "page": 73
+        },
+        {
+          "title": "Esophageal and Upper GI Disorders",
+          "page": 75
+        },
+        {
+          "title": "Inflammatory Bowel Disease",
+          "page": 76
+        },
+        {
+          "title": "Intestinal Disorders",
+          "page": 78
+        },
+        {
+          "title": "Nutrition and feeding 2025 RG CVR",
+          "page": 79
+        },
+        {
+          "title": "Pancreatitis",
+          "page": 80
+        },
+        {
+          "title": "Liver Chemistry Tests",
+          "page": 81
+        },
+        {
+          "title": "Biliary Disease",
+          "page": 82
+        },
+        {
+          "title": "Acute Liver Injury Failure",
+          "page": 83
+        },
+        {
+          "title": "Viral Hepatitis",
+          "page": 84
+        },
+        {
+          "title": "Alcohol-Related Liver Disease",
+          "page": 85
+        },
+        {
+          "title": "MASLD",
+          "page": 86
+        },
+        {
+          "title": "ESLD Overview",
+          "page": 87
+        },
+        {
+          "title": "ESLD Ascites SBP",
+          "page": 88
+        },
+        {
+          "title": "ESLD HE Bleeding",
+          "page": 89
+        },
+        {
+          "title": "ESLD HCC Others",
+          "page": 90
+        },
+        {
+          "title": "Hepatorenal Syndrome",
+          "page": 91
+        },
+        {
+          "title": "Liver Transplant",
+          "page": 92
+        }
       ]
     },
     {
       "title": "Nephrology",
       "entries": [
-        { "title": "AKI workup", "page": 1 },
-        { "title": "Acid-base disorders", "page": 1 },
-        { "title": "Electrolyte management", "page": 1 }
+        {
+          "title": "AKI",
+          "page": 93
+        },
+        {
+          "title": "Glomerular Disease",
+          "page": 95
+        },
+        {
+          "title": "CKD",
+          "page": 96
+        },
+        {
+          "title": "Dialysis Transplant",
+          "page": 97
+        },
+        {
+          "title": "Advanced Diuresis",
+          "page": 98
+        },
+        {
+          "title": "Acid-Base",
+          "page": 99
+        },
+        {
+          "title": "Sodium Disorders",
+          "page": 101
+        },
+        {
+          "title": "Potassium Disorders",
+          "page": 102
+        },
+        {
+          "title": "Mg Phos",
+          "page": 103
+        },
+        {
+          "title": "IV Fluids Lyte Repletion",
+          "page": 104
+        },
+        {
+          "title": "Urinalysis",
+          "page": 105
+        }
       ]
     },
     {
-      "title": "Infectious Disease",
+      "title": "ID",
       "entries": [
-        { "title": "Sepsis", "page": 1 },
-        { "title": "Pneumonia (CAP/HAP/VAP)", "page": 1 },
-        { "title": "Endocarditis", "page": 1 },
-        { "title": "Meningitis / encephalitis", "page": 1 }
+        {
+          "title": "Empiric Antimicrobials",
+          "page": 106
+        },
+        {
+          "title": "Multi-Drug Resitant Organisms",
+          "page": 108
+        },
+        {
+          "title": "CAP",
+          "page": 109
+        },
+        {
+          "title": "HAP VAP and Aspiration Pneumonia",
+          "page": 110
+        },
+        {
+          "title": "Viral Resp Infections and Head and Neck Infections",
+          "page": 111
+        },
+        {
+          "title": "Urinary Tract Infections",
+          "page": 112
+        },
+        {
+          "title": "Skin and Soft Tissue Infections",
+          "page": 113
+        },
+        {
+          "title": "Osteomyelitis",
+          "page": 114
+        },
+        {
+          "title": "Bloodstream Infection & Endocarditis",
+          "page": 115
+        },
+        {
+          "title": "Meningitis & Encephalitis",
+          "page": 116
+        },
+        {
+          "title": "C Difficile Infection",
+          "page": 117
+        },
+        {
+          "title": "Invasive Fungal Infections",
+          "page": 118
+        },
+        {
+          "title": "Tuberculosis",
+          "page": 119
+        },
+        {
+          "title": "HIV AIDS Opportunistic Infections",
+          "page": 120
+        },
+        {
+          "title": "Transplant ID",
+          "page": 121
+        },
+        {
+          "title": "STI and Travel Meds",
+          "page": 122
+        },
+        {
+          "title": "Tick-Borne Diseases",
+          "page": 123
+        },
+        {
+          "title": "MPOX ectoparasites",
+          "page": 124
+        },
+        {
+          "title": "Fever of Unknown Origin",
+          "page": 125
+        },
+        {
+          "title": "Rare Diseases",
+          "page": 126
+        },
+        {
+          "title": "Infection Control",
+          "page": 127
+        }
       ]
     },
     {
-      "title": "Heme / Onc",
+      "title": "Hematology",
       "entries": [
-        { "title": "Anemia workup", "page": 1 },
-        { "title": "Thrombocytopenia", "page": 1 },
-        { "title": "Anticoagulation reversal", "page": 1 },
-        { "title": "Tumor lysis syndrome", "page": 1 }
+        {
+          "title": "Pancytopenia and Anemia",
+          "page": 128
+        },
+        {
+          "title": "Sickle Cell Disease",
+          "page": 130
+        },
+        {
+          "title": "Thrombocytopenia",
+          "page": 131
+        },
+        {
+          "title": "Eosinophilia",
+          "page": 132
+        },
+        {
+          "title": "Coagulation Disorders",
+          "page": 133
+        },
+        {
+          "title": "AC Agents",
+          "page": 134
+        },
+        {
+          "title": "Anticoagulation Management",
+          "page": 135
+        },
+        {
+          "title": "Transfusion Medicine",
+          "page": 136
+        },
+        {
+          "title": "Transfusion Reactions",
+          "page": 138
+        },
+        {
+          "title": "Smear Interpretation",
+          "page": 139
+        }
+      ]
+    },
+    {
+      "title": "Oncology",
+      "entries": [
+        {
+          "title": "Acute Leukemia",
+          "page": 140
+        },
+        {
+          "title": "Lymphoma",
+          "page": 142
+        },
+        {
+          "title": "Plasma Cell Disorders",
+          "page": 143
+        },
+        {
+          "title": "MDS MPN",
+          "page": 144
+        },
+        {
+          "title": "HSCT",
+          "page": 145
+        },
+        {
+          "title": "CAR T-Cell Therapy",
+          "page": 148
+        },
+        {
+          "title": "Solid Organ Malignancies",
+          "page": 149
+        },
+        {
+          "title": "Immune Checkpoint Inhibitors",
+          "page": 151
+        },
+        {
+          "title": "Onc Emergencies",
+          "page": 152
+        },
+        {
+          "title": "Febrile Neutropenia",
+          "page": 153
+        },
+        {
+          "title": "Inpatient Chemotherapy",
+          "page": 154
+        }
+      ]
+    },
+    {
+      "title": "Geriatrics and Palliative Care",
+      "entries": [
+        {
+          "title": "Pain Management",
+          "page": 156
+        },
+        {
+          "title": "ACP Code Status Discussions",
+          "page": 158
+        },
+        {
+          "title": "End of Life Pronouncement",
+          "page": 160
+        },
+        {
+          "title": "CMOHospice",
+          "page": 161
+        },
+        {
+          "title": "Geri Assess Frailty",
+          "page": 162
+        },
+        {
+          "title": "Polypharmacy Elder Abuse LT NS",
+          "page": 163
+        }
+      ]
+    },
+    {
+      "title": "Rheumatology",
+      "entries": [
+        {
+          "title": "Approach to Rheumatic Disease 2024 MBS BG EJB CVR",
+          "page": 164
+        },
+        {
+          "title": "Arthritis",
+          "page": 165
+        },
+        {
+          "title": "Connective Tissue Diseases",
+          "page": 167
+        },
+        {
+          "title": "Vasculitis",
+          "page": 168
+        },
+        {
+          "title": "Autoantibodies H CVR (1)",
+          "page": 170
+        },
+        {
+          "title": "Miscellaneous Rheumatologic Diseases",
+          "page": 171
+        },
+        {
+          "title": "Rheumatologic Medications HA CVR (1)",
+          "page": 172
+        }
       ]
     },
     {
       "title": "Endocrine",
       "entries": [
-        { "title": "DKA / HHS", "page": 1 },
-        { "title": "Hypoglycemia", "page": 1 },
-        { "title": "Adrenal crisis", "page": 1 },
-        { "title": "Thyroid emergencies", "page": 1 }
+        {
+          "title": "Outpatient Diabetes",
+          "page": 173
+        },
+        {
+          "title": "Inpatient Diabetes",
+          "page": 175
+        },
+        {
+          "title": "j03 DKA HHS",
+          "page": 176
+        },
+        {
+          "title": "Adrenal Insufficiency",
+          "page": 177
+        },
+        {
+          "title": "Pituitary Disorders",
+          "page": 178
+        },
+        {
+          "title": "Calcium Disorders",
+          "page": 179
+        },
+        {
+          "title": "Osteoporosis Vit D",
+          "page": 180
+        },
+        {
+          "title": "Thyroid Disorders Male Hypogonadism",
+          "page": 181
+        }
+      ]
+    },
+    {
+      "title": "Allergy and Immunology",
+      "entries": [
+        {
+          "title": "Common Allergy Problems NS",
+          "page": 183
+        },
+        {
+          "title": "Angioedema & Anaphylaxis",
+          "page": 184
+        },
+        {
+          "title": "Drug Contrast Allergies",
+          "page": 185
+        },
+        {
+          "title": "Primary Immunodeficiency",
+          "page": 187
+        }
       ]
     },
     {
       "title": "Neurology",
       "entries": [
-        { "title": "Stroke", "page": 1 },
-        { "title": "Status epilepticus", "page": 1 },
-        { "title": "Altered mental status", "page": 1 }
+        {
+          "title": "Altered mental status",
+          "page": 188
+        },
+        {
+          "title": "Dementia",
+          "page": 189
+        },
+        {
+          "title": "Headache Vertigo",
+          "page": 190
+        },
+        {
+          "title": "Stroke TIA",
+          "page": 191
+        },
+        {
+          "title": "CNS Emergencies",
+          "page": 193
+        },
+        {
+          "title": "Seizures",
+          "page": 194
+        },
+        {
+          "title": "WeaknessNeuromuscular Disorders",
+          "page": 195
+        },
+        {
+          "title": "Neuroprognostication",
+          "page": 196
+        }
+      ]
+    },
+    {
+      "title": "Psychiatry",
+      "entries": [
+        {
+          "title": "Consent Capacity",
+          "page": 197
+        },
+        {
+          "title": "Agitation",
+          "page": 198
+        },
+        {
+          "title": "Delirium",
+          "page": 199
+        },
+        {
+          "title": "Psychosis",
+          "page": 200
+        },
+        {
+          "title": "Catatonia NMS Serotonin Syndrome",
+          "page": 201
+        },
+        {
+          "title": "Depression",
+          "page": 202
+        },
+        {
+          "title": "Anxiety",
+          "page": 203
+        },
+        {
+          "title": "AUD & Withdrawal",
+          "page": 204
+        },
+        {
+          "title": "Opioid Use Disorder",
+          "page": 207
+        },
+        {
+          "title": "Other Substance Use",
+          "page": 208
+        },
+        {
+          "title": "Drug Testing",
+          "page": 209
+        }
+      ]
+    },
+    {
+      "title": "Primary Care",
+      "entries": [
+        {
+          "title": "Health Screening Maintenance 2025 ES ES NS",
+          "page": 210
+        },
+        {
+          "title": "Womens Health",
+          "page": 212
+        },
+        {
+          "title": "Men s Health 2025 ES NS",
+          "page": 215
+        },
+        {
+          "title": "Transgender Health 2025 SD ES NS",
+          "page": 216
+        },
+        {
+          "title": "LGBTQIA+ Health TB SS AH MM NS",
+          "page": 217
+        },
+        {
+          "title": "Sleep Med 2025 BG ES NS",
+          "page": 219
+        },
+        {
+          "title": "N07HEENT Concerns",
+          "page": 220
+        },
+        {
+          "title": "Nodules 2024 SS UE BG ES NS",
+          "page": 222
+        },
+        {
+          "title": "MSK Pain 2025 GB MM NS",
+          "page": 223
+        },
+        {
+          "title": "Immigrant and Refugee Health 2025 EG MM NS",
+          "page": 225
+        },
+        {
+          "title": "Health Equity",
+          "page": 226
+        },
+        {
+          "title": "Disability Competent Care",
+          "page": 227
+        },
+        {
+          "title": "Outpatient CV Health CS CVR",
+          "page": 228
+        },
+        {
+          "title": "Weight and weight loss",
+          "page": 231
+        }
+      ]
+    },
+    {
+      "title": "Consultants",
+      "entries": [
+        {
+          "title": "Calling Consults",
+          "page": 232
+        },
+        {
+          "title": "Perioperative Medicine",
+          "page": 233
+        },
+        {
+          "title": "Dermatology",
+          "page": 235
+        },
+        {
+          "title": "Surgery",
+          "page": 238
+        },
+        {
+          "title": "Urology",
+          "page": 239
+        },
+        {
+          "title": "ENT",
+          "page": 240
+        },
+        {
+          "title": "Ophtho",
+          "page": 241
+        },
+        {
+          "title": "OBGYN",
+          "page": 242
+        }
+      ]
+    },
+    {
+      "title": "Radiology",
+      "entries": [
+        {
+          "title": "Radiology Basics",
+          "page": 244
+        },
+        {
+          "title": "Contrast",
+          "page": 245
+        },
+        {
+          "title": "Protocols",
+          "page": 246
+        },
+        {
+          "title": "Interpretation of Common Studies",
+          "page": 248
+        }
+      ]
+    },
+    {
+      "title": "Procedure",
+      "entries": [
+        {
+          "title": "Ultrasound Basics",
+          "page": 250
+        },
+        {
+          "title": "Ultrasound Guided Peripheral IV",
+          "page": 252
+        },
+        {
+          "title": "Central Line Placement",
+          "page": 253
+        },
+        {
+          "title": "Arterial Line Placement",
+          "page": 255
+        },
+        {
+          "title": "IO Line Placement",
+          "page": 256
+        },
+        {
+          "title": "Paracentesis",
+          "page": 257
+        },
+        {
+          "title": "Lumbar Puncture",
+          "page": 258
+        },
+        {
+          "title": "Thoracentesis",
+          "page": 259
+        },
+        {
+          "title": "Pericardial Drain",
+          "page": 260
+        },
+        {
+          "title": "Fluid Analysis",
+          "page": 261
+        },
+        {
+          "title": "Tube Managment",
+          "page": 262
+        },
+        {
+          "title": "Exposures Needle Sticks",
+          "page": 265
+        }
+      ]
+    },
+    {
+      "title": "Logistics",
+      "entries": [
+        {
+          "title": "Monitoring and Prophylaxis",
+          "page": 266
+        },
+        {
+          "title": "Post-Acute Care",
+          "page": 267
+        },
+        {
+          "title": "Inpatient care for incarcerated patients",
+          "page": 268
+        },
+        {
+          "title": "MGH Directory",
+          "page": 269
+        }
       ]
     }
   ]
