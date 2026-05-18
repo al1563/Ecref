@@ -11,7 +11,11 @@ const SECRETS = {
     "iv": "8Gmbx3N7t1c88wYB",
     "salt": "BzNNnuhOGajtk13s2pU5zA=="
   },
-  "patientsSheetUrl": null
+  "patientsSheetUrl": {
+    "ct": "RnmvlZw+bQ3pQDjTbwBqX08Eb2TaFIg49LljU/OJJmNqu0aJ5q5CpLr7uRSSlkTEBwnAU/vVN3jNYcATmfAGw5OMjcm+jo7TiHc8V31eCCWOduC8hUGGQfLdjHMQQeSFRwGIlckJo43SgQTyxfiOjf/fCNw=",
+    "iv": "1Yr9FGeE1TzNGBnC",
+    "salt": "g7GMdxWiS0LyVellK2qDPQ=="
+  }
 };
 const PBKDF2_ITER = 200000;
 
@@ -25,10 +29,9 @@ $(document).ready(function () {
     // Cache-bust on load so a fresh deploy is picked up immediately (avoids
     // GitHub Pages CDN serving stale JSON for up to 10 min after a commit).
     const bust = `?v=${Date.now()}`;
-    fetch('reference_data.json' + bust, { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => {
-            initKB(data.database || []);
+    loadEntries(bust)
+        .then(entries => {
+            initKB(entries);
             return fetch('dotphrases.txt' + bust, { cache: 'no-store' });
         })
         .then(r => r.text())
@@ -36,6 +39,7 @@ $(document).ready(function () {
             parseDotphrases(text);
             $('#loading').hide();
         })
+        .then(() => initHandbook(bust))
         .catch(err => {
             console.error('Error loading data:', err);
             $('#loading').html('<div class="alert alert-danger">Error loading reference data. Please refresh the page.</div>');
@@ -757,13 +761,16 @@ function renderDotphrases() {
 // =========================================================================
 
 const EDITOR_STORAGE = {
-    pat: 'ecref.editor.pat',         // encrypted PAT blob
+    pat: 'ecref.editor.pat',         // encrypted PAT blob (localStorage, GitHub mode)
     repo: 'ecref.editor.repo',       // {owner, repo} JSON if user overrides auto-detect
+    apiPassword: 'ecref.editor.apipw', // plain editor password (sessionStorage, API mode)
 };
 
 const EDITOR_STATE = {
-    configured: false,         // is an encrypted PAT in localStorage?
-    pat: null,                 // decrypted PAT (in memory only, this session)
+    mode: 'github',            // 'api' (Vercel KV) | 'github' (PAT-based)
+    configured: false,         // GitHub mode: is an encrypted PAT in localStorage?
+    pat: null,                 // GitHub mode: decrypted PAT (memory only)
+    apiPassword: null,         // API mode: editor password (memory only)
     owner: null,
     repo: null,
     tags: [],                  // tags being edited in the modal
@@ -776,6 +783,33 @@ const EDITOR_STATE = {
     entryModal: null,
     pendingActionAfterUnlock: null,
 };
+
+// Loads entries with mode auto-detection. Sets EDITOR_STATE.mode + .configured
+// as side effects so renderKB picks them up immediately.
+async function loadEntries(bust) {
+    let entries;
+    // Try the API first — works on Vercel deployments with KV configured.
+    try {
+        const r = await fetch('/api/entries', { cache: 'no-store' });
+        if (r.ok) {
+            const data = await r.json();
+            EDITOR_STATE.mode = 'api';
+            entries = data.database || [];
+        }
+    } catch (e) {
+        // Network error, no /api on this host, etc. — fall through.
+    }
+    if (entries === undefined) {
+        EDITOR_STATE.mode = 'github';
+        const r = await fetch('reference_data.json' + (bust || ''), { cache: 'no-store' });
+        const data = await r.json();
+        entries = data.database || [];
+    }
+    // API mode is always "configured" (just need password). GitHub mode depends on PAT.
+    EDITOR_STATE.configured = EDITOR_STATE.mode === 'api'
+        || !!localStorage.getItem(EDITOR_STORAGE.pat);
+    return entries;
+}
 
 // Detect owner/repo from GitHub Pages URL or stored override
 function detectRepo() {
@@ -805,7 +839,18 @@ function initEditor() {
     const { owner, repo } = detectRepo();
     EDITOR_STATE.owner = owner;
     EDITOR_STATE.repo = repo;
-    EDITOR_STATE.configured = !!localStorage.getItem(EDITOR_STORAGE.pat);
+    // In API mode, "configured" is always true (just need to enter password).
+    // In GitHub mode, it depends on whether an encrypted PAT exists.
+    EDITOR_STATE.configured = EDITOR_STATE.mode === 'api'
+        || !!localStorage.getItem(EDITOR_STORAGE.pat);
+
+    // Restore API password from sessionStorage if we set it earlier this tab session.
+    if (EDITOR_STATE.mode === 'api') {
+        try {
+            const stored = sessionStorage.getItem(EDITOR_STORAGE.apiPassword);
+            if (stored) EDITOR_STATE.apiPassword = stored;
+        } catch (e) { /* private mode etc. — ignore */ }
+    }
 
     // Bootstrap modal instances
     if (window.bootstrap) {
@@ -829,8 +874,24 @@ function initEditor() {
         requireEditor(() => openEntryEditor(null));
     });
     document.getElementById('kbEditorMenu')?.addEventListener('click', () => {
+        if (EDITOR_STATE.mode === 'api') {
+            // API mode: offer to clear the cached password (forces re-prompt)
+            if (EDITOR_STATE.apiPassword) {
+                if (confirm('Clear the editor password? You will be prompted again on next edit.')) {
+                    EDITOR_STATE.apiPassword = null;
+                    try { sessionStorage.removeItem(EDITOR_STORAGE.apiPassword); } catch (e) { /* ignore */ }
+                    toast('Editor password cleared.', 'info');
+                }
+            } else {
+                toast('API mode: password is set in Vercel env var EDITOR_PASSWORD. Click Add Entry to enter it.', 'info', { duration: 5000 });
+            }
+            return;
+        }
         openSetupWizard();
     });
+
+    // Re-render KB now that we know the editor mode (affects Edit button visibility)
+    if (typeof renderKB === 'function' && KB_STATE.entries.length) renderKB();
 }
 
 // =========================================================================
@@ -1058,6 +1119,36 @@ async function unlockPatFromModal() {
     const pw = document.getElementById('unlockPasswordInput').value;
     const err = document.getElementById('unlockError');
     err.style.display = 'none';
+
+    if (EDITOR_STATE.mode === 'api') {
+        // Verify the password by attempting a no-op authenticated request.
+        // We use DELETE on a known-missing id; expect 404 (auth OK) or 401 (bad pw).
+        try {
+            const r = await fetch('/api/entries/__auth_probe__', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${pw}` },
+            });
+            if (r.status === 401) {
+                err.textContent = 'Wrong password.';
+                err.style.display = 'block';
+                return;
+            }
+            // Any other status (404, 200) means auth was accepted
+            EDITOR_STATE.apiPassword = pw;
+            try { sessionStorage.setItem(EDITOR_STORAGE.apiPassword, pw); } catch (e) { /* ignore */ }
+            document.getElementById('unlockPasswordInput').value = '';
+            EDITOR_STATE.unlockModal?.hide();
+            const next = EDITOR_STATE.pendingActionAfterUnlock;
+            EDITOR_STATE.pendingActionAfterUnlock = null;
+            if (next) next();
+        } catch (e) {
+            err.textContent = 'Could not reach the API. Try again.';
+            err.style.display = 'block';
+        }
+        return;
+    }
+
+    // GitHub mode: decrypt the PAT with the password
     const secret = loadEncryptedPat();
     if (!secret) {
         EDITOR_STATE.unlockModal?.hide();
@@ -1072,12 +1163,20 @@ async function unlockPatFromModal() {
         EDITOR_STATE.pendingActionAfterUnlock = null;
         if (next) next();
     } catch (e) {
+        err.textContent = 'Wrong password.';
         err.style.display = 'block';
     }
 }
 
-// Run callback once editor is unlocked. Shows wizard or unlock prompt as needed.
+// Run callback once editor is unlocked. Branches by mode.
 function requireEditor(cb) {
+    if (EDITOR_STATE.mode === 'api') {
+        if (EDITOR_STATE.apiPassword) { cb(); return; }
+        EDITOR_STATE.pendingActionAfterUnlock = cb;
+        promptApiPassword();
+        return;
+    }
+    // GitHub mode (default / legacy)
     if (EDITOR_STATE.pat) { cb(); return; }
     if (EDITOR_STATE.configured) {
         EDITOR_STATE.pendingActionAfterUnlock = cb;
@@ -1089,6 +1188,18 @@ function requireEditor(cb) {
         EDITOR_STATE.pendingActionAfterUnlock = cb;
         openSetupWizard();
     }
+}
+
+// API mode: open the unlock modal repurposed as a "enter editor password" prompt.
+function promptApiPassword() {
+    const titleEl = document.querySelector('#unlockModal .modal-title');
+    const bodyText = document.querySelector('#unlockModal .modal-body p');
+    if (titleEl) titleEl.innerHTML = '<i class="fas fa-key me-2"></i>Editor password';
+    if (bodyText) bodyText.textContent = 'Enter the editor password (set in Vercel as EDITOR_PASSWORD).';
+    document.getElementById('unlockError').style.display = 'none';
+    document.getElementById('unlockPasswordInput').value = '';
+    EDITOR_STATE.unlockModal?.show();
+    setTimeout(() => document.getElementById('unlockPasswordInput').focus(), 250);
 }
 
 // =========================================================================
@@ -1239,18 +1350,28 @@ function renderEditorImages() {
         return;
     }
     list.innerHTML = EDITOR_STATE.images.map(p => {
+        const isUploading = p.startsWith('uploading:');
         const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(p);
         const isPending = EDITOR_STATE.pendingUploads.some(u => u.path === p);
-        const thumb = isImg
-            ? `<img src="${escapeHtml(p)}" alt="">`
-            : `<span class="img-note">${escapeHtml(p)}</span>`;
-        return `<div class="editor-image-chip${isPending ? ' pending' : ''}">
+        let thumb;
+        if (isUploading) {
+            thumb = '<div class="img-uploading"><i class="fas fa-spinner fa-spin"></i></div>';
+        } else if (isImg) {
+            thumb = `<img src="${escapeHtml(p)}" alt="">`;
+        } else {
+            thumb = `<span class="img-note">${escapeHtml(p)}</span>`;
+        }
+        const label = isUploading ? p.slice('uploading:'.length) : p;
+        let badge = '';
+        if (isUploading) badge = '<span class="badge bg-info text-dark">Uploading…</span>';
+        else if (isPending) badge = '<span class="badge bg-warning text-dark">Will upload on save</span>';
+        return `<div class="editor-image-chip${isPending || isUploading ? ' pending' : ''}">
             ${thumb}
             <div class="editor-image-meta">
-                <small>${escapeHtml(p)}</small>
-                ${isPending ? '<span class="badge bg-warning text-dark">Will upload on save</span>' : ''}
+                <small>${escapeHtml(label)}</small>
+                ${badge}
             </div>
-            <button type="button" class="btn btn-sm btn-outline-danger" data-rm-img="${escapeHtml(p)}" aria-label="Remove image">&times;</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-rm-img="${escapeHtml(p)}" aria-label="Remove image"${isUploading ? ' disabled' : ''}>&times;</button>
         </div>`;
     }).join('');
 }
@@ -1258,14 +1379,62 @@ function renderEditorImages() {
 async function handleImageFiles(files) {
     for (const file of files) {
         if (!file.type.startsWith('image/')) continue;
-        const ext = file.name.split('.').pop().toLowerCase();
-        const baseSlug = (file.name.replace(/\.[^.]+$/, '') || 'img')
-            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-        const path = `images/${baseSlug}-${Date.now()}.${ext}`;
-        const b64 = await fileToB64(file);
-        EDITOR_STATE.pendingUploads.push({ path, contentB64: b64 });
-        EDITOR_STATE.images.push(path);
+
+        // API mode: try R2 upload first (instant). Fall back to GitHub queue if it fails.
+        if (EDITOR_STATE.mode === 'api' && EDITOR_STATE.apiPassword) {
+            const placeholderPath = `uploading:${file.name}-${Date.now()}`;
+            EDITOR_STATE.images.push(placeholderPath);
+            renderEditorImages();
+            try {
+                const b64 = await fileToB64(file);
+                const r = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${EDITOR_STATE.apiPassword}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentB64: b64,
+                        contentType: file.type,
+                    }),
+                });
+                if (r.status === 503) {
+                    // R2 not configured on the server — surface this loudly so the
+                    // user knows why image upload is silently queueing for GitHub.
+                    EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
+                    toast('R2 not configured on the server (check /api/health). Image queued for GitHub commit instead.', 'error', { duration: 8000 });
+                    await queueImageForGithub(file);
+                    continue;
+                }
+                if (!r.ok) {
+                    const j = await r.json().catch(() => ({}));
+                    throw new Error(j.error || `HTTP ${r.status}`);
+                }
+                const { url } = await r.json();
+                // Replace placeholder with real URL
+                EDITOR_STATE.images = EDITOR_STATE.images.map(p => p === placeholderPath ? url : p);
+                renderEditorImages();
+            } catch (e) {
+                EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
+                renderEditorImages();
+                toast(`Image upload failed: ${e.message}`, 'error', { duration: 5000 });
+            }
+        } else {
+            // GitHub mode (or API mode with no R2): queue for the GitHub commit at save
+            await queueImageForGithub(file);
+        }
     }
+}
+
+async function queueImageForGithub(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const baseSlug = (file.name.replace(/\.[^.]+$/, '') || 'img')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    const path = `images/${baseSlug}-${Date.now()}.${ext}`;
+    const b64 = await fileToB64(file);
+    EDITOR_STATE.pendingUploads.push({ path, contentB64: b64 });
+    EDITOR_STATE.images.push(path);
     renderEditorImages();
 }
 
@@ -1286,6 +1455,10 @@ function slugifyTitle(title) {
 function buildEntryFromForm() {
     const title = document.getElementById('entryTitle').value.trim();
     if (!title) throw new Error('Title is required.');
+    // Reject save while uploads are still in flight
+    if (EDITOR_STATE.images.some(p => p.startsWith('uploading:'))) {
+        throw new Error('Wait for image uploads to finish before saving.');
+    }
     const dataBody = document.getElementById('entryData').value.trim();
     const template = document.getElementById('entryTemplate').value;
     const category = document.getElementById('entryCategory').value || 'Other';
@@ -1337,27 +1510,65 @@ async function saveEntry() {
     const savingToast = toast(`Saving "${getTitle(entry)}"...`, 'info', { duration: 0 });
 
     try {
-        // Upload any pending images first
-        for (const upload of EDITOR_STATE.pendingUploads) {
-            await ghPutFile(upload.path, upload.contentB64, null, `Add image ${upload.path}`);
-        }
-        EDITOR_STATE.pendingUploads = [];
-
-        // Fetch fresh JSON for SHA + content
-        const file = await ghGetFile('reference_data.json');
-        if (!file) throw new Error('reference_data.json not found in repo.');
-        const existing = JSON.parse(b64ToUtf8(file.contentB64));
-        if (isEdit) {
-            existing.database = existing.database.map(e => e.id === entry.id ? entry : e);
+        if (EDITOR_STATE.mode === 'api') {
+            // Image uploads still go through GitHub (KV stores JSON only). If the
+            // user has a PAT configured, use it; otherwise warn that images won't
+            // be uploaded but the entry will still save with image paths only.
+            if (EDITOR_STATE.pendingUploads.length) {
+                if (EDITOR_STATE.pat) {
+                    for (const upload of EDITOR_STATE.pendingUploads) {
+                        await ghPutFile(upload.path, upload.contentB64, null, `Add image ${upload.path}`);
+                    }
+                } else {
+                    toast('Image uploads skipped (need GitHub PAT for images). Entry saved without new images.', 'info', { duration: 5000 });
+                    // Strip pending-upload paths from the entry
+                    const pendingPaths = new Set(EDITOR_STATE.pendingUploads.map(u => u.path));
+                    entry.imgs = entry.imgs.split(',').map(s => s.trim()).filter(p => p && !pendingPaths.has(p)).join(', ');
+                }
+                EDITOR_STATE.pendingUploads = [];
+            }
+            const url = isEdit ? `/api/entries/${encodeURIComponent(entry.id)}` : '/api/entries';
+            const method = isEdit ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${EDITOR_STATE.apiPassword}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(entry),
+            });
+            if (r.status === 401) {
+                EDITOR_STATE.apiPassword = null;
+                try { sessionStorage.removeItem(EDITOR_STORAGE.apiPassword); } catch (e) { /* ignore */ }
+                throw new Error('Editor password rejected. Click save again to re-enter.');
+            }
+            if (!r.ok) {
+                const j = await r.json().catch(() => ({}));
+                throw new Error(j.error || `API error: ${r.status}`);
+            }
+            dismissToast(savingToast);
+            toast('Saved! Live immediately.', 'success');
         } else {
-            existing.database.push(entry);
-        }
-        const newContent = JSON.stringify(existing, null, 2);
-        await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha,
-            isEdit ? `Update entry: ${getTitle(entry)}` : `Add entry: ${getTitle(entry)}`);
+            // GitHub mode — commits to reference_data.json in the repo
+            for (const upload of EDITOR_STATE.pendingUploads) {
+                await ghPutFile(upload.path, upload.contentB64, null, `Add image ${upload.path}`);
+            }
+            EDITOR_STATE.pendingUploads = [];
 
-        dismissToast(savingToast);
-        toast('Saved! Live on GitHub Pages in ~60 seconds.', 'success');
+            const file = await ghGetFile('reference_data.json');
+            if (!file) throw new Error('reference_data.json not found in repo.');
+            const existing = JSON.parse(b64ToUtf8(file.contentB64));
+            if (isEdit) {
+                existing.database = existing.database.map(e => e.id === entry.id ? entry : e);
+            } else {
+                existing.database.push(entry);
+            }
+            const newContent = JSON.stringify(existing, null, 2);
+            await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha,
+                isEdit ? `Update entry: ${getTitle(entry)}` : `Add entry: ${getTitle(entry)}`);
+            dismissToast(savingToast);
+            toast('Saved! Live on GitHub Pages in ~60 seconds.', 'success');
+        }
     } catch (err) {
         // Revert optimistic update
         KB_STATE.entries = previousEntries;
@@ -1387,14 +1598,32 @@ async function deleteEntry(entry) {
     const savingToast = toast(`Deleting "${getTitle(entry)}"...`, 'info', { duration: 0 });
 
     try {
-        const file = await ghGetFile('reference_data.json');
-        if (!file) throw new Error('reference_data.json not found.');
-        const existing = JSON.parse(b64ToUtf8(file.contentB64));
-        existing.database = existing.database.filter(e => e.id !== entry.id);
-        const newContent = JSON.stringify(existing, null, 2);
-        await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha, `Delete entry: ${getTitle(entry)}`);
-        dismissToast(savingToast);
-        toast('Deleted. Live on GitHub Pages in ~60 seconds.', 'success');
+        if (EDITOR_STATE.mode === 'api') {
+            const r = await fetch(`/api/entries/${encodeURIComponent(entry.id)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${EDITOR_STATE.apiPassword}` },
+            });
+            if (r.status === 401) {
+                EDITOR_STATE.apiPassword = null;
+                try { sessionStorage.removeItem(EDITOR_STORAGE.apiPassword); } catch (e) { /* ignore */ }
+                throw new Error('Editor password rejected.');
+            }
+            if (!r.ok && r.status !== 404) {
+                const j = await r.json().catch(() => ({}));
+                throw new Error(j.error || `API error: ${r.status}`);
+            }
+            dismissToast(savingToast);
+            toast('Deleted. Live immediately.', 'success');
+        } else {
+            const file = await ghGetFile('reference_data.json');
+            if (!file) throw new Error('reference_data.json not found.');
+            const existing = JSON.parse(b64ToUtf8(file.contentB64));
+            existing.database = existing.database.filter(e => e.id !== entry.id);
+            const newContent = JSON.stringify(existing, null, 2);
+            await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha, `Delete entry: ${getTitle(entry)}`);
+            dismissToast(savingToast);
+            toast('Deleted. Live on GitHub Pages in ~60 seconds.', 'success');
+        }
     } catch (err) {
         KB_STATE.entries = previousEntries;
         renderKB();
@@ -1427,4 +1656,137 @@ function toast(message, kind = 'info', opts = {}) {
 function dismissToast(id) {
     const el = document.querySelector(`[data-toast-id="${id}"]`);
     if (el) el.remove();
+}
+
+// =========================================================================
+// MGH Handbook — TOC tab driven by mgh-toc.json
+// =========================================================================
+
+const HANDBOOK_STATE = { toc: null, query: '', activeEntry: null };
+
+function initHandbook(bust) {
+    fetch('mgh-toc.json' + (bust || ''), { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(toc => {
+            if (!toc) {
+                document.getElementById('handbookContent').innerHTML =
+                    '<div class="alert alert-warning">Could not load <code>mgh-toc.json</code>.</div>';
+                return;
+            }
+            HANDBOOK_STATE.toc = toc;
+            document.getElementById('handbookSubtitle').textContent = toc.subtitle || '';
+            renderHandbook();
+        })
+        .catch(() => {
+            document.getElementById('handbookContent').innerHTML =
+                '<div class="alert alert-info">No handbook configured yet. Drop your PDF at <code>docs/mgh-handbook.pdf</code> and edit <code>mgh-toc.json</code> with the page numbers.</div>';
+        });
+
+    document.getElementById('handbookSearch')?.addEventListener('input', e => {
+        HANDBOOK_STATE.query = e.target.value;
+        renderHandbook();
+    });
+
+    // Delegated click on TOC entries — render page images inline
+    document.getElementById('handbookContent')?.addEventListener('click', e => {
+        const link = e.target.closest('[data-entry-id]');
+        if (!link) return;
+        e.preventDefault();
+        const entryId = link.dataset.entryId;
+        const [si, ei] = entryId.split('-').map(Number);
+        const sec = HANDBOOK_STATE.toc?.sections?.[si];
+        const entry = sec?.entries?.[ei];
+        if (entry) loadHandbookEntry(entry, entryId);
+    });
+}
+
+function loadHandbookEntry(entry, entryId) {
+    HANDBOOK_STATE.activeEntry = entryId;
+    const viewer = document.getElementById('handbookViewer');
+    const placeholder = document.getElementById('handbookViewerPlaceholder');
+    const titleEl = document.getElementById('handbookViewerTitle');
+    const actions = document.getElementById('handbookViewerActions');
+    const pagesLabel = document.getElementById('handbookViewerPages');
+    const openPdf = document.getElementById('handbookOpenPdf');
+    const toc = HANDBOOK_STATE.toc;
+
+    const start = Number(entry.page) || 1;
+    const end = Number(entry.pageEnd) || start;
+    const tmpl = toc?.pageImagePath || 'docs/mgh-pages/page-{n:03d}.jpg';
+    const pdfPath = toc?.pdfPath || 'docs/MGH-2526-handbook.pdf';
+
+    // Build the image stack
+    let html = '';
+    for (let n = start; n <= end; n++) {
+        const src = tmpl.replace('{n:03d}', String(n).padStart(3, '0'));
+        const eager = (n === start) ? 'eager' : 'lazy';
+        html += `<figure class="handbook-page">
+            <img src="${escapeHtml(src)}" alt="Page ${n}" loading="${eager}" decoding="async">
+            <figcaption>p.${n}</figcaption>
+        </figure>`;
+    }
+    viewer.innerHTML = html;
+    viewer.scrollTop = 0;
+    viewer.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+
+    titleEl.textContent = entry.title || '';
+    titleEl.classList.remove('text-muted');
+    actions.style.display = 'flex';
+    pagesLabel.textContent = (start === end) ? `p.${start}` : `p.${start}–${end}`;
+    openPdf.href = `${pdfPath}#page=${start}`;
+
+    // Highlight active entry in TOC
+    document.querySelectorAll('.handbook-entry.active').forEach(el => el.classList.remove('active'));
+    const el = document.querySelector(`[data-entry-id="${CSS.escape(entryId)}"]`);
+    if (el) el.classList.add('active');
+}
+
+function renderHandbook() {
+    const toc = HANDBOOK_STATE.toc;
+    if (!toc) return;
+    const q = HANDBOOK_STATE.query.trim().toLowerCase();
+    const pdfPath = toc.pdfPath || 'docs/mgh-handbook.pdf';
+    const sections = (toc.sections || []).map(sec => {
+        const entries = (sec.entries || []).filter(e => {
+            if (!q) return true;
+            return (e.title || '').toLowerCase().includes(q)
+                || (sec.title || '').toLowerCase().includes(q);
+        });
+        return { ...sec, entries };
+    }).filter(sec => sec.entries.length > 0);
+
+    if (!sections.length) {
+        document.getElementById('handbookContent').innerHTML = '';
+        document.getElementById('handbookEmpty').style.display = 'block';
+        return;
+    }
+    document.getElementById('handbookEmpty').style.display = 'none';
+
+    const html = sections.map((sec, si) => `
+        <div class="handbook-section">
+            <h6 class="handbook-section-title">${escapeHtml(sec.title || '')}</h6>
+            <ul class="handbook-entries">
+                ${sec.entries.map((e, ei) => {
+                    const page = Number(e.page) || 1;
+                    const href = e.file
+                        ? escapeHtml(e.file)
+                        : `${escapeHtml(pdfPath)}#page=${page}`;
+                    const entryId = `${si}-${ei}`;
+                    const isActive = HANDBOOK_STATE.activeEntry === entryId;
+                    return `<li>
+                        <a href="${href}"
+                           class="handbook-entry${isActive ? ' active' : ''}"
+                           data-entry-href="${href}"
+                           data-entry-title="${escapeHtml(e.title || '')}"
+                           data-entry-id="${entryId}">
+                            <span class="handbook-entry-title">${escapeHtml(e.title || '')}</span>
+                            <span class="handbook-entry-page">p.${page}</span>
+                        </a>
+                    </li>`;
+                }).join('')}
+            </ul>
+        </div>
+    `).join('');
+    document.getElementById('handbookContent').innerHTML = html;
 }

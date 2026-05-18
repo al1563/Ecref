@@ -1,4 +1,9 @@
 .DS_Store
 
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
 # Local-only encryption helper — never deploy to GitHub Pages
 tools/
