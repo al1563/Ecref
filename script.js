@@ -25,10 +25,9 @@ $(document).ready(function () {
     // Cache-bust on load so a fresh deploy is picked up immediately (avoids
     // GitHub Pages CDN serving stale JSON for up to 10 min after a commit).
     const bust = `?v=${Date.now()}`;
-    fetch('reference_data.json' + bust, { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => {
-            initKB(data.database || []);
+    loadEntries(bust)
+        .then(entries => {
+            initKB(entries);
             return fetch('dotphrases.txt' + bust, { cache: 'no-store' });
         })
         .then(r => r.text())
@@ -763,8 +762,10 @@ const EDITOR_STORAGE = {
 };
 
 const EDITOR_STATE = {
-    configured: false,         // is an encrypted PAT in localStorage?
-    pat: null,                 // decrypted PAT (in memory only, this session)
+    mode: 'github',            // 'api' (Vercel KV) | 'github' (PAT-based)
+    configured: false,         // GitHub mode: is an encrypted PAT in localStorage?
+    pat: null,                 // GitHub mode: decrypted PAT (memory only)
+    apiPassword: null,         // API mode: editor password (memory only)
     owner: null,
     repo: null,
     tags: [],                  // tags being edited in the modal
@@ -777,6 +778,33 @@ const EDITOR_STATE = {
     entryModal: null,
     pendingActionAfterUnlock: null,
 };
+
+// Loads entries with mode auto-detection. Sets EDITOR_STATE.mode + .configured
+// as side effects so renderKB picks them up immediately.
+async function loadEntries(bust) {
+    let entries;
+    // Try the API first — works on Vercel deployments with KV configured.
+    try {
+        const r = await fetch('/api/entries', { cache: 'no-store' });
+        if (r.ok) {
+            const data = await r.json();
+            EDITOR_STATE.mode = 'api';
+            entries = data.database || [];
+        }
+    } catch (e) {
+        // Network error, no /api on this host, etc. — fall through.
+    }
+    if (entries === undefined) {
+        EDITOR_STATE.mode = 'github';
+        const r = await fetch('reference_data.json' + (bust || ''), { cache: 'no-store' });
+        const data = await r.json();
+        entries = data.database || [];
+    }
+    // API mode is always "configured" (just need password). GitHub mode depends on PAT.
+    EDITOR_STATE.configured = EDITOR_STATE.mode === 'api'
+        || !!localStorage.getItem(EDITOR_STORAGE.pat);
+    return entries;
+}
 
 // Detect owner/repo from GitHub Pages URL or stored override
 function detectRepo() {
@@ -806,7 +834,10 @@ function initEditor() {
     const { owner, repo } = detectRepo();
     EDITOR_STATE.owner = owner;
     EDITOR_STATE.repo = repo;
-    EDITOR_STATE.configured = !!localStorage.getItem(EDITOR_STORAGE.pat);
+    // In API mode, "configured" is always true (just need to enter password).
+    // In GitHub mode, it depends on whether an encrypted PAT exists.
+    EDITOR_STATE.configured = EDITOR_STATE.mode === 'api'
+        || !!localStorage.getItem(EDITOR_STORAGE.pat);
 
     // Bootstrap modal instances
     if (window.bootstrap) {
@@ -830,8 +861,23 @@ function initEditor() {
         requireEditor(() => openEntryEditor(null));
     });
     document.getElementById('kbEditorMenu')?.addEventListener('click', () => {
+        if (EDITOR_STATE.mode === 'api') {
+            // API mode: offer to clear the in-memory password (forces re-prompt)
+            if (EDITOR_STATE.apiPassword) {
+                if (confirm('Clear the editor password from memory? You will be prompted again on next edit.')) {
+                    EDITOR_STATE.apiPassword = null;
+                    toast('Editor password cleared from memory.', 'info');
+                }
+            } else {
+                toast('API mode: password is set in Vercel env var EDITOR_PASSWORD. Click Add Entry to enter it.', 'info', { duration: 5000 });
+            }
+            return;
+        }
         openSetupWizard();
     });
+
+    // Re-render KB now that we know the editor mode (affects Edit button visibility)
+    if (typeof renderKB === 'function' && KB_STATE.entries.length) renderKB();
 }
 
 // =========================================================================
@@ -1059,6 +1105,35 @@ async function unlockPatFromModal() {
     const pw = document.getElementById('unlockPasswordInput').value;
     const err = document.getElementById('unlockError');
     err.style.display = 'none';
+
+    if (EDITOR_STATE.mode === 'api') {
+        // Verify the password by attempting a no-op authenticated request.
+        // We use DELETE on a known-missing id; expect 404 (auth OK) or 401 (bad pw).
+        try {
+            const r = await fetch('/api/entries/__auth_probe__', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${pw}` },
+            });
+            if (r.status === 401) {
+                err.textContent = 'Wrong password.';
+                err.style.display = 'block';
+                return;
+            }
+            // Any other status (404, 200) means auth was accepted
+            EDITOR_STATE.apiPassword = pw;
+            document.getElementById('unlockPasswordInput').value = '';
+            EDITOR_STATE.unlockModal?.hide();
+            const next = EDITOR_STATE.pendingActionAfterUnlock;
+            EDITOR_STATE.pendingActionAfterUnlock = null;
+            if (next) next();
+        } catch (e) {
+            err.textContent = 'Could not reach the API. Try again.';
+            err.style.display = 'block';
+        }
+        return;
+    }
+
+    // GitHub mode: decrypt the PAT with the password
     const secret = loadEncryptedPat();
     if (!secret) {
         EDITOR_STATE.unlockModal?.hide();
@@ -1073,12 +1148,20 @@ async function unlockPatFromModal() {
         EDITOR_STATE.pendingActionAfterUnlock = null;
         if (next) next();
     } catch (e) {
+        err.textContent = 'Wrong password.';
         err.style.display = 'block';
     }
 }
 
-// Run callback once editor is unlocked. Shows wizard or unlock prompt as needed.
+// Run callback once editor is unlocked. Branches by mode.
 function requireEditor(cb) {
+    if (EDITOR_STATE.mode === 'api') {
+        if (EDITOR_STATE.apiPassword) { cb(); return; }
+        EDITOR_STATE.pendingActionAfterUnlock = cb;
+        promptApiPassword();
+        return;
+    }
+    // GitHub mode (default / legacy)
     if (EDITOR_STATE.pat) { cb(); return; }
     if (EDITOR_STATE.configured) {
         EDITOR_STATE.pendingActionAfterUnlock = cb;
@@ -1090,6 +1173,18 @@ function requireEditor(cb) {
         EDITOR_STATE.pendingActionAfterUnlock = cb;
         openSetupWizard();
     }
+}
+
+// API mode: open the unlock modal repurposed as a "enter editor password" prompt.
+function promptApiPassword() {
+    const titleEl = document.querySelector('#unlockModal .modal-title');
+    const bodyText = document.querySelector('#unlockModal .modal-body p');
+    if (titleEl) titleEl.innerHTML = '<i class="fas fa-key me-2"></i>Editor password';
+    if (bodyText) bodyText.textContent = 'Enter the editor password (set in Vercel as EDITOR_PASSWORD).';
+    document.getElementById('unlockError').style.display = 'none';
+    document.getElementById('unlockPasswordInput').value = '';
+    EDITOR_STATE.unlockModal?.show();
+    setTimeout(() => document.getElementById('unlockPasswordInput').focus(), 250);
 }
 
 // =========================================================================
@@ -1338,27 +1433,64 @@ async function saveEntry() {
     const savingToast = toast(`Saving "${getTitle(entry)}"...`, 'info', { duration: 0 });
 
     try {
-        // Upload any pending images first
-        for (const upload of EDITOR_STATE.pendingUploads) {
-            await ghPutFile(upload.path, upload.contentB64, null, `Add image ${upload.path}`);
-        }
-        EDITOR_STATE.pendingUploads = [];
-
-        // Fetch fresh JSON for SHA + content
-        const file = await ghGetFile('reference_data.json');
-        if (!file) throw new Error('reference_data.json not found in repo.');
-        const existing = JSON.parse(b64ToUtf8(file.contentB64));
-        if (isEdit) {
-            existing.database = existing.database.map(e => e.id === entry.id ? entry : e);
+        if (EDITOR_STATE.mode === 'api') {
+            // Image uploads still go through GitHub (KV stores JSON only). If the
+            // user has a PAT configured, use it; otherwise warn that images won't
+            // be uploaded but the entry will still save with image paths only.
+            if (EDITOR_STATE.pendingUploads.length) {
+                if (EDITOR_STATE.pat) {
+                    for (const upload of EDITOR_STATE.pendingUploads) {
+                        await ghPutFile(upload.path, upload.contentB64, null, `Add image ${upload.path}`);
+                    }
+                } else {
+                    toast('Image uploads skipped (need GitHub PAT for images). Entry saved without new images.', 'info', { duration: 5000 });
+                    // Strip pending-upload paths from the entry
+                    const pendingPaths = new Set(EDITOR_STATE.pendingUploads.map(u => u.path));
+                    entry.imgs = entry.imgs.split(',').map(s => s.trim()).filter(p => p && !pendingPaths.has(p)).join(', ');
+                }
+                EDITOR_STATE.pendingUploads = [];
+            }
+            const url = isEdit ? `/api/entries/${encodeURIComponent(entry.id)}` : '/api/entries';
+            const method = isEdit ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${EDITOR_STATE.apiPassword}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(entry),
+            });
+            if (r.status === 401) {
+                EDITOR_STATE.apiPassword = null;
+                throw new Error('Editor password rejected. Click save again to re-enter.');
+            }
+            if (!r.ok) {
+                const j = await r.json().catch(() => ({}));
+                throw new Error(j.error || `API error: ${r.status}`);
+            }
+            dismissToast(savingToast);
+            toast('Saved! Live immediately.', 'success');
         } else {
-            existing.database.push(entry);
-        }
-        const newContent = JSON.stringify(existing, null, 2);
-        await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha,
-            isEdit ? `Update entry: ${getTitle(entry)}` : `Add entry: ${getTitle(entry)}`);
+            // GitHub mode — commits to reference_data.json in the repo
+            for (const upload of EDITOR_STATE.pendingUploads) {
+                await ghPutFile(upload.path, upload.contentB64, null, `Add image ${upload.path}`);
+            }
+            EDITOR_STATE.pendingUploads = [];
 
-        dismissToast(savingToast);
-        toast('Saved! Live on GitHub Pages in ~60 seconds.', 'success');
+            const file = await ghGetFile('reference_data.json');
+            if (!file) throw new Error('reference_data.json not found in repo.');
+            const existing = JSON.parse(b64ToUtf8(file.contentB64));
+            if (isEdit) {
+                existing.database = existing.database.map(e => e.id === entry.id ? entry : e);
+            } else {
+                existing.database.push(entry);
+            }
+            const newContent = JSON.stringify(existing, null, 2);
+            await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha,
+                isEdit ? `Update entry: ${getTitle(entry)}` : `Add entry: ${getTitle(entry)}`);
+            dismissToast(savingToast);
+            toast('Saved! Live on GitHub Pages in ~60 seconds.', 'success');
+        }
     } catch (err) {
         // Revert optimistic update
         KB_STATE.entries = previousEntries;
@@ -1388,14 +1520,31 @@ async function deleteEntry(entry) {
     const savingToast = toast(`Deleting "${getTitle(entry)}"...`, 'info', { duration: 0 });
 
     try {
-        const file = await ghGetFile('reference_data.json');
-        if (!file) throw new Error('reference_data.json not found.');
-        const existing = JSON.parse(b64ToUtf8(file.contentB64));
-        existing.database = existing.database.filter(e => e.id !== entry.id);
-        const newContent = JSON.stringify(existing, null, 2);
-        await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha, `Delete entry: ${getTitle(entry)}`);
-        dismissToast(savingToast);
-        toast('Deleted. Live on GitHub Pages in ~60 seconds.', 'success');
+        if (EDITOR_STATE.mode === 'api') {
+            const r = await fetch(`/api/entries/${encodeURIComponent(entry.id)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${EDITOR_STATE.apiPassword}` },
+            });
+            if (r.status === 401) {
+                EDITOR_STATE.apiPassword = null;
+                throw new Error('Editor password rejected.');
+            }
+            if (!r.ok && r.status !== 404) {
+                const j = await r.json().catch(() => ({}));
+                throw new Error(j.error || `API error: ${r.status}`);
+            }
+            dismissToast(savingToast);
+            toast('Deleted. Live immediately.', 'success');
+        } else {
+            const file = await ghGetFile('reference_data.json');
+            if (!file) throw new Error('reference_data.json not found.');
+            const existing = JSON.parse(b64ToUtf8(file.contentB64));
+            existing.database = existing.database.filter(e => e.id !== entry.id);
+            const newContent = JSON.stringify(existing, null, 2);
+            await ghPutFile('reference_data.json', utf8ToB64(newContent), file.sha, `Delete entry: ${getTitle(entry)}`);
+            dismissToast(savingToast);
+            toast('Deleted. Live on GitHub Pages in ~60 seconds.', 'success');
+        }
     } catch (err) {
         KB_STATE.entries = previousEntries;
         renderKB();

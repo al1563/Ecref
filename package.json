@@ -1,0 +1,13 @@
+{
+  "name": "ecref",
+  "version": "1.0.0",
+  "description": "Medical reference site — static + Vercel serverless API for real-time KB editing",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.3"
+  }
+}

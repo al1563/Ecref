@@ -18,6 +18,49 @@ Author: Elaine Cheung
 
 ---
 
+## Real-time editing via Vercel KV (recommended)
+
+If the site is deployed on Vercel with KV configured, edits take effect **instantly** for everyone — no GitHub commit, no rebuild wait. The site auto-detects this and switches modes; on GitHub Pages it falls back to the GitHub-PAT flow described in the next section.
+
+### Vercel KV one-time setup (~5 min)
+
+1. **Create the KV store**
+   - Vercel dashboard → your Ecref project → **Storage** tab → **Create Database** → pick **Upstash for Redis** (free tier covers this use case).
+   - Vercel automatically adds the env vars (`KV_REST_API_URL`, `KV_REST_API_TOKEN`, etc.).
+
+2. **Set the editor password**
+   - Same dashboard → **Settings** → **Environment Variables**.
+   - Add `EDITOR_PASSWORD` with the password you want to use for editing.
+   - Apply to: Production, Preview, Development.
+
+3. **Redeploy** (Settings → Deployments → … → Redeploy) so the new env vars take effect.
+
+4. **Seed the KV with the current knowledge base**
+   - Open `tools/seed-kv.html` locally (double-click).
+   - Site URL: your Vercel URL (e.g. `https://ecref.vercel.app`).
+   - Password: the `EDITOR_PASSWORD` you set above.
+   - File: pick `reference_data.json` from this repo.
+   - Click **Seed KV**. Should say "✓ Seeded 442 entries."
+
+5. **Done.** Visit the Vercel site, click **+ Add entry** — the unlock modal will prompt for your editor password (one-time per browser session). Hit save and the entry is live immediately.
+
+### What "real-time" means
+
+| Action | Effect |
+|---|---|
+| You click Save in the editor | Entry appears in your KB instantly (optimistic UI) AND lands in KV |
+| Someone else refreshes the site | They see your edit immediately (`/api/entries` reads KV directly) |
+| You add an image to an entry | If you still have a GitHub PAT configured, the image uploads to the repo (triggers a Vercel rebuild). If not, the entry saves without the image. |
+
+### Caveats
+
+- **Images still live in the GitHub repo** for now (KV stores JSON only). Image uploads still trigger a rebuild. JSON-only edits don't.
+- **Backups**: KV is the source of truth in this mode. Periodically download the current state via `curl https://ecref.vercel.app/api/entries -o backup.json` and commit it to the repo as a snapshot.
+- **github.io still shows the static `reference_data.json`** until you redirect it to Vercel — it will be stale post-KV-edits.
+- **Vercel KV free tier**: 256 MB storage / 30k requests/day (Upstash free tier as of 2026). Plenty for personal use.
+
+---
+
 ## Editing the Knowledge Base from your browser (no coding required)
 
 The site has a built-in editor that saves directly to GitHub. Once set up, you just click **+ Add entry** and fill out a form — the site commits to your repo for you, and GitHub Pages republishes within ~60 seconds.
