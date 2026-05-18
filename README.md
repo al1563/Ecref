@@ -56,10 +56,72 @@ The `/seed.html` page also has:
 
 ### Caveats
 
-- **Images still live in the GitHub repo** for now (KV stores JSON only). Image uploads still trigger a rebuild. JSON-only edits don't.
+- **Images** are uploaded to Cloudflare R2 in real-time when R2 is configured (see next section). If R2 is not configured, image uploads fall back to GitHub commits (which trigger a Vercel rebuild). JSON-only edits never trigger rebuilds.
 - **Backups**: KV is the source of truth in this mode. Periodically download the current state via `curl https://ecref.vercel.app/api/entries -o backup.json` and commit it to the repo as a snapshot.
 - **github.io still shows the static `reference_data.json`** until you redirect it to Vercel — it will be stale post-KV-edits.
 - **Vercel KV free tier**: 256 MB storage / 30k requests/day (Upstash free tier as of 2026). Plenty for personal use.
+
+---
+
+## Real-time image uploads via Cloudflare R2 (optional but recommended)
+
+R2 is free up to 10 GB storage + 10M reads/month with **zero egress fees** (better than any S3-clone). Setting it up means image uploads become instant — no GitHub commit, no Vercel rebuild.
+
+### One-time R2 setup (~10 min)
+
+1. **Sign up for Cloudflare** if you don't have an account: <https://dash.cloudflare.com/sign-up>
+
+2. **Create an R2 bucket**
+   - Cloudflare dashboard → **R2** → **Create bucket**
+   - Name: `ecref-images` (or whatever you want)
+   - Location: Automatic
+   - Click **Create bucket**
+
+3. **Enable public access on the bucket**
+   - Open the bucket → **Settings** → scroll to **Public Development URL** → **Allow Access**
+   - Copy the resulting URL — looks like `https://pub-XXXXXXXXXXXXXXXXXXXXXXXX.r2.dev`. You'll need this.
+   - (Optional: connect a custom domain like `images.ecref.com` for cleaner URLs)
+
+4. **Create an R2 API token**
+   - R2 dashboard → **Manage R2 API Tokens** → **Create API token**
+   - Permission: **Object Read & Write**
+   - Specify bucket: your `ecref-images` bucket
+   - TTL: as long as you want (or "Forever" for personal use)
+   - Click **Create API Token**
+   - **Copy the Access Key ID and Secret Access Key now** — you can't see them again
+   - Also note the **Account ID** at the top of the R2 dashboard
+
+5. **Add env vars in Vercel**
+   - Vercel dashboard → Ecref project → Settings → Environment Variables
+   - Add five variables (Production + Preview + Development):
+     - `R2_ACCOUNT_ID` = your Cloudflare account ID
+     - `R2_ACCESS_KEY_ID` = the access key from step 4
+     - `R2_SECRET_ACCESS_KEY` = the secret key from step 4
+     - `R2_BUCKET` = `ecref-images`
+     - `R2_PUBLIC_URL` = the `https://pub-XXX.r2.dev` URL from step 3 (no trailing slash)
+
+6. **Redeploy** (Vercel auto-redeploys when env vars change; if not, do it manually).
+
+7. **Test it**
+   - Open the site → Add entry → drag an image into the editor → should see "Uploading…" briefly, then a thumbnail with a `pub-XXX.r2.dev` URL.
+   - Save the entry. Image displays in the KB card.
+
+### How R2 vs GitHub interact
+
+| Mode | Image upload destination |
+|---|---|
+| KV + R2 configured | R2 (instant) |
+| KV but no R2 | Falls back to GitHub commit (requires PAT) |
+| GitHub-only mode (e.g., github.io) | GitHub commit (existing flow) |
+
+### When images get expensive
+
+R2 free tier covers far more than a personal site needs. You'd start paying when you exceed:
+- **10 GB total storage** (≈ 20,000 medium PNG schemas) → $0.015/GB-month after
+- **10M monthly reads** (≈ 333k page views with 30 images each) → $0.36 per million after
+- **Egress: $0 always** — viral traffic doesn't bill you
+
+Compare with Vercel Blob at this scale: roughly **10× more expensive** for storage and you'd pay $0.15/GB for egress.
 
 ---
 

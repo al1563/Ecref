@@ -1335,18 +1335,28 @@ function renderEditorImages() {
         return;
     }
     list.innerHTML = EDITOR_STATE.images.map(p => {
+        const isUploading = p.startsWith('uploading:');
         const isImg = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(p);
         const isPending = EDITOR_STATE.pendingUploads.some(u => u.path === p);
-        const thumb = isImg
-            ? `<img src="${escapeHtml(p)}" alt="">`
-            : `<span class="img-note">${escapeHtml(p)}</span>`;
-        return `<div class="editor-image-chip${isPending ? ' pending' : ''}">
+        let thumb;
+        if (isUploading) {
+            thumb = '<div class="img-uploading"><i class="fas fa-spinner fa-spin"></i></div>';
+        } else if (isImg) {
+            thumb = `<img src="${escapeHtml(p)}" alt="">`;
+        } else {
+            thumb = `<span class="img-note">${escapeHtml(p)}</span>`;
+        }
+        const label = isUploading ? p.slice('uploading:'.length) : p;
+        let badge = '';
+        if (isUploading) badge = '<span class="badge bg-info text-dark">Uploading…</span>';
+        else if (isPending) badge = '<span class="badge bg-warning text-dark">Will upload on save</span>';
+        return `<div class="editor-image-chip${isPending || isUploading ? ' pending' : ''}">
             ${thumb}
             <div class="editor-image-meta">
-                <small>${escapeHtml(p)}</small>
-                ${isPending ? '<span class="badge bg-warning text-dark">Will upload on save</span>' : ''}
+                <small>${escapeHtml(label)}</small>
+                ${badge}
             </div>
-            <button type="button" class="btn btn-sm btn-outline-danger" data-rm-img="${escapeHtml(p)}" aria-label="Remove image">&times;</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-rm-img="${escapeHtml(p)}" aria-label="Remove image"${isUploading ? ' disabled' : ''}>&times;</button>
         </div>`;
     }).join('');
 }
@@ -1354,14 +1364,60 @@ function renderEditorImages() {
 async function handleImageFiles(files) {
     for (const file of files) {
         if (!file.type.startsWith('image/')) continue;
-        const ext = file.name.split('.').pop().toLowerCase();
-        const baseSlug = (file.name.replace(/\.[^.]+$/, '') || 'img')
-            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-        const path = `images/${baseSlug}-${Date.now()}.${ext}`;
-        const b64 = await fileToB64(file);
-        EDITOR_STATE.pendingUploads.push({ path, contentB64: b64 });
-        EDITOR_STATE.images.push(path);
+
+        // API mode: try R2 upload first (instant). Fall back to GitHub queue if it fails.
+        if (EDITOR_STATE.mode === 'api' && EDITOR_STATE.apiPassword) {
+            const placeholderPath = `uploading:${file.name}-${Date.now()}`;
+            EDITOR_STATE.images.push(placeholderPath);
+            renderEditorImages();
+            try {
+                const b64 = await fileToB64(file);
+                const r = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${EDITOR_STATE.apiPassword}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentB64: b64,
+                        contentType: file.type,
+                    }),
+                });
+                if (r.status === 503) {
+                    // R2 not configured — fall back to GitHub queue
+                    EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
+                    await queueImageForGithub(file);
+                    continue;
+                }
+                if (!r.ok) {
+                    const j = await r.json().catch(() => ({}));
+                    throw new Error(j.error || `HTTP ${r.status}`);
+                }
+                const { url } = await r.json();
+                // Replace placeholder with real URL
+                EDITOR_STATE.images = EDITOR_STATE.images.map(p => p === placeholderPath ? url : p);
+                renderEditorImages();
+            } catch (e) {
+                EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
+                renderEditorImages();
+                toast(`Image upload failed: ${e.message}`, 'error', { duration: 5000 });
+            }
+        } else {
+            // GitHub mode (or API mode with no R2): queue for the GitHub commit at save
+            await queueImageForGithub(file);
+        }
     }
+}
+
+async function queueImageForGithub(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const baseSlug = (file.name.replace(/\.[^.]+$/, '') || 'img')
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    const path = `images/${baseSlug}-${Date.now()}.${ext}`;
+    const b64 = await fileToB64(file);
+    EDITOR_STATE.pendingUploads.push({ path, contentB64: b64 });
+    EDITOR_STATE.images.push(path);
     renderEditorImages();
 }
 
@@ -1382,6 +1438,10 @@ function slugifyTitle(title) {
 function buildEntryFromForm() {
     const title = document.getElementById('entryTitle').value.trim();
     if (!title) throw new Error('Title is required.');
+    // Reject save while uploads are still in flight
+    if (EDITOR_STATE.images.some(p => p.startsWith('uploading:'))) {
+        throw new Error('Wait for image uploads to finish before saving.');
+    }
     const dataBody = document.getElementById('entryData').value.trim();
     const template = document.getElementById('entryTemplate').value;
     const category = document.getElementById('entryCategory').value || 'Other';

@@ -840,6 +840,17 @@ table.dataTable tbody td {
     object-fit: cover;
     border-radius: 4px;
 }
+.editor-image-chip .img-uploading {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #eef4fa;
+    border-radius: 4px;
+    color: var(--uci-blue);
+    font-size: 1.4rem;
+}
 .editor-image-meta {
     flex: 1;
     min-width: 0;
