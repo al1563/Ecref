@@ -1434,7 +1434,7 @@ function dismissToast(id) {
 // MGH Handbook — TOC tab driven by mgh-toc.json
 // =========================================================================
 
-const HANDBOOK_STATE = { toc: null, query: '' };
+const HANDBOOK_STATE = { toc: null, query: '', activeEntry: null };
 
 function initHandbook(bust) {
     fetch('mgh-toc.json' + (bust || ''), { cache: 'no-store' })
@@ -1458,6 +1458,36 @@ function initHandbook(bust) {
         HANDBOOK_STATE.query = e.target.value;
         renderHandbook();
     });
+
+    // Delegated click on TOC entries — load inline instead of opening new tab
+    document.getElementById('handbookContent')?.addEventListener('click', e => {
+        const link = e.target.closest('[data-entry-href]');
+        if (!link) return;
+        e.preventDefault();
+        loadHandbookEntry(link.dataset.entryHref, link.dataset.entryTitle, link.dataset.entryId);
+    });
+}
+
+function loadHandbookEntry(href, title, entryId) {
+    HANDBOOK_STATE.activeEntry = entryId;
+    const iframe = document.getElementById('handbookViewer');
+    const placeholder = document.getElementById('handbookViewerPlaceholder');
+    const titleEl = document.getElementById('handbookViewerTitle');
+    const actions = document.getElementById('handbookViewerActions');
+    const openNewTab = document.getElementById('handbookOpenNewTab');
+
+    iframe.src = href;
+    iframe.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    titleEl.textContent = title;
+    titleEl.classList.remove('text-muted');
+    actions.style.display = 'flex';
+    openNewTab.href = href;
+
+    // Mark active entry in the TOC
+    document.querySelectorAll('.handbook-entry.active').forEach(el => el.classList.remove('active'));
+    const el = document.querySelector(`[data-entry-id="${CSS.escape(entryId)}"]`);
+    if (el) el.classList.add('active');
 }
 
 function renderHandbook() {
@@ -1481,18 +1511,23 @@ function renderHandbook() {
     }
     document.getElementById('handbookEmpty').style.display = 'none';
 
-    const html = sections.map(sec => `
+    const html = sections.map((sec, si) => `
         <div class="handbook-section">
             <h6 class="handbook-section-title">${escapeHtml(sec.title || '')}</h6>
             <ul class="handbook-entries">
-                ${sec.entries.map(e => {
+                ${sec.entries.map((e, ei) => {
                     const page = Number(e.page) || 1;
-                    // Prefer chopped file if present; fall back to page anchor on full PDF
                     const href = e.file
                         ? escapeHtml(e.file)
                         : `${escapeHtml(pdfPath)}#page=${page}`;
+                    const entryId = `${si}-${ei}`;
+                    const isActive = HANDBOOK_STATE.activeEntry === entryId;
                     return `<li>
-                        <a href="${href}" target="_blank" rel="noopener" class="handbook-entry">
+                        <a href="${href}"
+                           class="handbook-entry${isActive ? ' active' : ''}"
+                           data-entry-href="${href}"
+                           data-entry-title="${escapeHtml(e.title || '')}"
+                           data-entry-id="${entryId}">
                             <span class="handbook-entry-title">${escapeHtml(e.title || '')}</span>
                             <span class="handbook-entry-page">p.${page}</span>
                         </a>
