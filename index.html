@@ -34,6 +34,7 @@
             <button class="tab-button" data-section="dotphrases">Dot Phrases</button>
             <button class="tab-button" data-section="protected">Clinical Reasoning</button>
             <button class="tab-button" data-section="patients">Patients</button>
+            <button class="tab-button" data-section="handbook">Handbook</button>
         </div>
     </div>
 
@@ -596,6 +597,21 @@
                     <input type="text" id="dotphraseSearch" class="form-control" placeholder="Search dot phrases...">
                 </div>
                 <div id="dotphrasesContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MGH Handbook TOC -->
+    <div id="handbook-section" class="data-section">
+        <div class="card">
+            <div class="card-header"><i class="fas fa-book me-2"></i>MGH Pocket Medicine — Table of Contents</div>
+            <div class="card-body">
+                <div id="handbookSubtitle" class="text-muted small mb-3"></div>
+                <input type="search" id="handbookSearch" class="form-control mb-3" placeholder="Search chapters and entries...">
+                <div id="handbookContent"></div>
+                <div id="handbookEmpty" class="text-muted text-center py-4" style="display:none;">
+                    <i class="fas fa-search me-2"></i>No matching entries.
+                </div>
             </div>
         </div>
     </div>

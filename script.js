@@ -36,6 +36,7 @@ $(document).ready(function () {
             parseDotphrases(text);
             $('#loading').hide();
         })
+        .then(() => initHandbook(bust))
         .catch(err => {
             console.error('Error loading data:', err);
             $('#loading').html('<div class="alert alert-danger">Error loading reference data. Please refresh the page.</div>');
@@ -1427,4 +1428,75 @@ function toast(message, kind = 'info', opts = {}) {
 function dismissToast(id) {
     const el = document.querySelector(`[data-toast-id="${id}"]`);
     if (el) el.remove();
+}
+
+// =========================================================================
+// MGH Handbook — TOC tab driven by mgh-toc.json
+// =========================================================================
+
+const HANDBOOK_STATE = { toc: null, query: '' };
+
+function initHandbook(bust) {
+    fetch('mgh-toc.json' + (bust || ''), { cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(toc => {
+            if (!toc) {
+                document.getElementById('handbookContent').innerHTML =
+                    '<div class="alert alert-warning">Could not load <code>mgh-toc.json</code>.</div>';
+                return;
+            }
+            HANDBOOK_STATE.toc = toc;
+            document.getElementById('handbookSubtitle').textContent = toc.subtitle || '';
+            renderHandbook();
+        })
+        .catch(() => {
+            document.getElementById('handbookContent').innerHTML =
+                '<div class="alert alert-info">No handbook configured yet. Drop your PDF at <code>docs/mgh-handbook.pdf</code> and edit <code>mgh-toc.json</code> with the page numbers.</div>';
+        });
+
+    document.getElementById('handbookSearch')?.addEventListener('input', e => {
+        HANDBOOK_STATE.query = e.target.value;
+        renderHandbook();
+    });
+}
+
+function renderHandbook() {
+    const toc = HANDBOOK_STATE.toc;
+    if (!toc) return;
+    const q = HANDBOOK_STATE.query.trim().toLowerCase();
+    const pdfPath = toc.pdfPath || 'docs/mgh-handbook.pdf';
+    const sections = (toc.sections || []).map(sec => {
+        const entries = (sec.entries || []).filter(e => {
+            if (!q) return true;
+            return (e.title || '').toLowerCase().includes(q)
+                || (sec.title || '').toLowerCase().includes(q);
+        });
+        return { ...sec, entries };
+    }).filter(sec => sec.entries.length > 0);
+
+    if (!sections.length) {
+        document.getElementById('handbookContent').innerHTML = '';
+        document.getElementById('handbookEmpty').style.display = 'block';
+        return;
+    }
+    document.getElementById('handbookEmpty').style.display = 'none';
+
+    const html = sections.map(sec => `
+        <div class="handbook-section">
+            <h6 class="handbook-section-title">${escapeHtml(sec.title || '')}</h6>
+            <ul class="handbook-entries">
+                ${sec.entries.map(e => {
+                    const page = Number(e.page) || 1;
+                    const href = `${escapeHtml(pdfPath)}#page=${page}`;
+                    return `<li>
+                        <a href="${href}" target="_blank" rel="noopener" class="handbook-entry">
+                            <span class="handbook-entry-title">${escapeHtml(e.title || '')}</span>
+                            <span class="handbook-entry-page">p.${page}</span>
+                        </a>
+                    </li>`;
+                }).join('')}
+            </ul>
+        </div>
+    `).join('');
+    document.getElementById('handbookContent').innerHTML = html;
 }

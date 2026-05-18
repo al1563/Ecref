@@ -974,3 +974,61 @@ table.dataTable tbody td {
         flex: 1 1 100%;
     }
 }
+
+/* =====================================================================
+   MGH Handbook tab — TOC layout
+   ===================================================================== */
+
+.handbook-section {
+    margin-bottom: 1.4rem;
+}
+.handbook-section-title {
+    color: var(--uci-blue);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #e5e9ee;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.5rem;
+}
+.handbook-entries {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.3rem;
+}
+.handbook-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #eef4fa;
+    border-left: 3px solid var(--uci-blue);
+    border-radius: 4px;
+    color: #1c2733;
+    text-decoration: none;
+    font-size: 0.88rem;
+    line-height: 1.3;
+    transition: background 0.15s, transform 0.1s;
+}
+.handbook-entry:hover {
+    background: #dfe9f5;
+    color: var(--uci-blue);
+    transform: translateX(2px);
+}
+.handbook-entry-title {
+    flex: 1;
+    min-width: 0;
+}
+.handbook-entry-page {
+    color: #888;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+.handbook-entry:hover .handbook-entry-page {
+    color: var(--uci-blue);
+}

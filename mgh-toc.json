@@ -1,0 +1,77 @@
+{
+  "pdfPath": "docs/mgh-handbook.pdf",
+  "subtitle": "Edit mgh-toc.json to match the page numbers in your copy. Each entry below is a placeholder — replace with the real chapters/sections of the MGH Pocket Medicine handbook.",
+  "sections": [
+    {
+      "title": "Cardiology",
+      "entries": [
+        { "title": "ACLS algorithms", "page": 1 },
+        { "title": "Acute coronary syndromes (NSTEMI / STEMI)", "page": 1 },
+        { "title": "Heart failure", "page": 1 },
+        { "title": "Atrial fibrillation", "page": 1 },
+        { "title": "Valvular disease", "page": 1 }
+      ]
+    },
+    {
+      "title": "Pulmonary",
+      "entries": [
+        { "title": "Asthma exacerbation", "page": 1 },
+        { "title": "COPD exacerbation", "page": 1 },
+        { "title": "Pulmonary embolism", "page": 1 },
+        { "title": "ARDS", "page": 1 }
+      ]
+    },
+    {
+      "title": "GI / Hepatology",
+      "entries": [
+        { "title": "GI bleeding", "page": 1 },
+        { "title": "Acute pancreatitis", "page": 1 },
+        { "title": "Cirrhosis & complications", "page": 1 },
+        { "title": "IBD", "page": 1 }
+      ]
+    },
+    {
+      "title": "Nephrology",
+      "entries": [
+        { "title": "AKI workup", "page": 1 },
+        { "title": "Acid-base disorders", "page": 1 },
+        { "title": "Electrolyte management", "page": 1 }
+      ]
+    },
+    {
+      "title": "Infectious Disease",
+      "entries": [
+        { "title": "Sepsis", "page": 1 },
+        { "title": "Pneumonia (CAP/HAP/VAP)", "page": 1 },
+        { "title": "Endocarditis", "page": 1 },
+        { "title": "Meningitis / encephalitis", "page": 1 }
+      ]
+    },
+    {
+      "title": "Heme / Onc",
+      "entries": [
+        { "title": "Anemia workup", "page": 1 },
+        { "title": "Thrombocytopenia", "page": 1 },
+        { "title": "Anticoagulation reversal", "page": 1 },
+        { "title": "Tumor lysis syndrome", "page": 1 }
+      ]
+    },
+    {
+      "title": "Endocrine",
+      "entries": [
+        { "title": "DKA / HHS", "page": 1 },
+        { "title": "Hypoglycemia", "page": 1 },
+        { "title": "Adrenal crisis", "page": 1 },
+        { "title": "Thyroid emergencies", "page": 1 }
+      ]
+    },
+    {
+      "title": "Neurology",
+      "entries": [
+        { "title": "Stroke", "page": 1 },
+        { "title": "Status epilepticus", "page": 1 },
+        { "title": "Altered mental status", "page": 1 }
+      ]
+    }
+  ]
+}
