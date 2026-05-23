@@ -1804,8 +1804,10 @@ function renderHandbook() {
 // Reference tab — Antibiotics + ConanLi + EBM + UW + MKSAP
 // =========================================================================
 
+// Tree of TOC nodes. A node with an `items` array is a collapsible group.
+// Otherwise it's an item; its `type` controls how the right pane renders it.
 const REFERENCE_TOC = [
-    { type: 'group', id: 'g-antibiotics', title: 'Antibiotics', icon: 'fa-pills', items: [
+    { id: 'g-antibiotics', title: 'Antibiotics', icon: 'fa-pills', items: [
         { id: 'abx-guide',       title: 'Antibiotics guide',     icon: 'fa-file-image', type: 'poster',
           src: 'docs/abx-guide-pages/page-1.jpg',
           caption: 'Northwestern Introductory Guide to Antibiotics',
@@ -1823,16 +1825,16 @@ const REFERENCE_TOC = [
           section: 'abx-extras',
           subtitle: 'Reference images, dosing tables, links you want to keep handy.' },
     ]},
-    { type: 'item', id: 'conanli', title: 'ConanLi UMD', icon: 'fa-user-md', type2: 'external',
+    { id: 'conanli', title: 'ConanLi UMD', icon: 'fa-user-md', type: 'external',
       url: 'https://conanliumd.com/en-usd',
       reason: 'site blocks embedding (X-Frame-Options)' },
-    { type: 'item', id: 'ebm', title: 'EBM articles', icon: 'fa-flask', type2: 'list',
+    { id: 'ebm', title: 'EBM articles', icon: 'fa-flask', type: 'list',
       section: 'ebm', dailyPick: true,
       subtitle: 'Landmark trials and evidence-based reference articles. One pick surfaces daily.' },
-    { type: 'item', id: 'uw', title: 'UW Learning Objectives', icon: 'fa-graduation-cap', type2: 'list',
+    { id: 'uw', title: 'UW Learning Objectives', icon: 'fa-graduation-cap', type: 'list',
       section: 'uw',
       subtitle: 'UWorld learning objectives — track what you\'ve learned.' },
-    { type: 'item', id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type2: 'mksap',
+    { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
       section: 'mksap', dailyPick: true,
       subtitle: 'Password-gated. Boards Basics notes from your MKSAP account.' },
 ];
@@ -2267,15 +2269,20 @@ function pickOfTheDay(items) {
     return items[hash % items.length];
 }
 
-// ----- Editor readiness gate (mirror logic from KB) -----
+// ----- Editor readiness gate -----
+// Returns true when the API editor *can* be used. In API mode we always show
+// edit buttons; clicking one triggers requireEditor() which lazily prompts
+// for the password if it isn't already in this session.
 function editorReadyHtml() {
-    // Returns true if the API editor is configured & has a password this session
-    return EDITOR_STATE.mode === 'api' && EDITOR_STATE.apiPassword;
+    return EDITOR_STATE.mode === 'api';
 }
 function unconfiguredEditorMsg() {
-    if (EDITOR_STATE.mode !== 'api') return 'Editing requires the Vercel/KV deployment.';
-    return 'Editor not unlocked. Open the Knowledge Base tab → set up editor.';
+    return 'Editing requires the Vercel/KV deployment.';
 }
+
+// The Reference sections reuse the existing global `requireEditor(cb)`
+// helper (defined above) — same lazy-unlock flow as the KB. No separate
+// password.
 
 // ----- Fetch a list section -----
 async function fetchListSection(section, bearer = null) {
@@ -2288,20 +2295,24 @@ async function fetchListSection(section, bearer = null) {
 }
 
 // ----- Wire delegated clicks on list items (add/edit/delete) -----
+// Add/Edit/Delete on non-MKSAP sections lazy-unlock the editor via
+// requireEditor(); MKSAP uses its own gate and is already unlocked by the
+// time these buttons render.
 function wireListActions(viewer, section) {
+    const guard = section === 'mksap' ? (fn) => fn() : requireEditor;
     viewer.querySelectorAll('[data-ref-add]').forEach(el => {
-        el.addEventListener('click', () => openRefItemModal(el.dataset.refAdd, null));
+        el.addEventListener('click', () => guard(() => openRefItemModal(el.dataset.refAdd, null)));
     });
     viewer.querySelectorAll('[data-ref-edit]').forEach(el => {
         const [sec, id] = el.dataset.refEdit.split('/');
-        el.addEventListener('click', () => {
+        el.addEventListener('click', () => guard(() => {
             const item = (REFERENCE_STATE.lists[sec] || []).find(i => i.id === id);
             if (item) openRefItemModal(sec, item);
-        });
+        }));
     });
     viewer.querySelectorAll('[data-ref-delete]').forEach(el => {
         const [sec, id] = el.dataset.refDelete.split('/');
-        el.addEventListener('click', () => deleteRefItem(sec, id));
+        el.addEventListener('click', () => guard(() => deleteRefItem(sec, id)));
     });
 }
 
