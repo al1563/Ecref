@@ -9,6 +9,7 @@
 tools/
 .vercel
 .env*.local
+node_modules/
 
 # Source PDFs + chopped page JPGs — served from Cloudflare R2 instead.
 # To re-upload after editing locally: see tools/upload-to-r2.js

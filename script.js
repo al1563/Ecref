@@ -1835,7 +1835,8 @@ const REFERENCE_TOC = [
         { id: 'uw-flowsheets', title: 'Flow Sheet Tables', icon: 'fa-table-list',
           type: 'pdf-toc',
           tocJson: 'uw-flowsheets-toc.json',
-          subtitle: 'UWorld boards review tables and flowcharts (163 pages).' },
+          overridesSection: 'uw-toc-overrides',
+          subtitle: 'UWorld boards review tables and flowcharts (163 pages). Edit titles + categories with the pencil icon.' },
     ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
       section: 'mksap', dailyPick: true,
@@ -1905,6 +1906,11 @@ function initReference() {
     wireRefItemModal();
     // MKSAP unlock modal wiring
     wireMksapUnlock();
+    // PDF TOC override modal wiring
+    document.getElementById('pdfTocOverrideSave')?.addEventListener('click', savePdfTocOverride);
+    document.getElementById('pdfTocOverrideReset')?.addEventListener('click', () => {
+        if (confirm('Revert this entry to its default title and category?')) deletePdfTocOverride();
+    });
 }
 
 function refAllItems() {
@@ -2228,34 +2234,50 @@ async function renderMksapSection(node) {
 // sub-TOC on the left (240px, scrollable, searchable) and the page-image
 // stack on the right.
 
-const PDF_TOC_CACHE = {};   // path -> parsed JSON
-const PDF_TOC_STATE = {};   // pdf-toc node id -> { activeEntryId, query }
+const PDF_TOC_CACHE = {};   // path -> parsed JSON (base TOC)
+const PDF_TOC_STATE = {};   // node.id -> { activePage, query, baseToc, merged, overrides, overridesSection }
+
+// The override system: each pdf-toc node may declare `overridesSection` (a
+// KV section name like 'uw-toc-overrides'). When set, the renderer fetches
+// the override list, merges it onto the base TOC (override wins per page),
+// and renders a pencil icon on each entry that the editor can use to
+// rename/recategorize. Override records:
+//   { id: 'p142', page: 142, title?: 'Wilson disease', section?: 'GI' }
 
 async function renderPdfToc(node) {
     const viewer = refViewer();
-    // The pdf-toc layout needs the viewer to be a flex column so the inner
-    // grid can fill the right pane. Padding is removed so the viewer/sidebar
-    // can use the full height.
     viewer.classList.add('pdf-toc-host');
     viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading ${escapeHtml(node.title)}...</div>`;
 
-    let toc;
+    let baseToc;
     try {
-        toc = PDF_TOC_CACHE[node.tocJson]
-            ?? (PDF_TOC_CACHE[node.tocJson] = await fetch(node.tocJson, { cache: 'no-store' }).then(r => {
+        baseToc = PDF_TOC_CACHE[node.tocJson]
+            ??= await fetch(node.tocJson, { cache: 'no-store' }).then(r => {
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return r.json();
-            }));
+            });
     } catch (e) {
         viewer.innerHTML = `<div class="alert alert-warning">Couldn't load <code>${escapeHtml(node.tocJson)}</code>: ${escapeHtml(e.message)}</div>`;
         return;
     }
 
-    const state = PDF_TOC_STATE[node.id] ||= { activeEntryId: null, query: '' };
-    const totalEntries = (toc.sections || []).reduce((n, s) => n + (s.entries?.length || 0), 0);
+    let overrides = [];
+    if (node.overridesSection) {
+        try { overrides = await fetchListSection(node.overridesSection); }
+        catch (e) { console.warn('Failed to load overrides:', e); }
+    }
 
-    refActions().innerHTML = `<span class="text-muted small">${totalEntries} entries</span>
-        <a href="${escapeHtml(toc.pdfPath)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary ms-2">
+    const state = PDF_TOC_STATE[node.id] ||= { activePage: null, query: '' };
+    state.baseToc = baseToc;
+    state.overrides = overrides;
+    state.overridesSection = node.overridesSection || null;
+    state.merged = mergePdfTocOverrides(baseToc, overrides);
+
+    const totalEntries = state.merged.sections.reduce((n, s) => n + s.entries.length, 0);
+    const overrideCount = overrides.length;
+
+    refActions().innerHTML = `<span class="text-muted small">${totalEntries} entries${overrideCount ? ` · ${overrideCount} edited` : ''}</span>
+        <a href="${escapeHtml(baseToc.pdfPath)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary ms-2">
             <i class="fas fa-file-pdf me-1"></i>PDF
         </a>`;
 
@@ -2263,7 +2285,7 @@ async function renderPdfToc(node) {
         <div class="pdf-toc-layout">
             <aside class="pdf-toc-sidebar">
                 <div class="pdf-toc-search-wrap">
-                    <input type="search" class="form-control form-control-sm" id="pdfTocSearch" placeholder="Search ${escapeHtml(toc.title || 'entries')}...">
+                    <input type="search" class="form-control form-control-sm" id="pdfTocSearch" placeholder="Search ${escapeHtml(baseToc.title || 'entries')}...">
                 </div>
                 <div class="pdf-toc-list" id="pdfTocList"></div>
                 <div class="pdf-toc-empty text-muted text-center py-3" id="pdfTocEmpty" style="display:none;">
@@ -2273,51 +2295,108 @@ async function renderPdfToc(node) {
             <main class="pdf-toc-viewer" id="pdfTocViewer">
                 <div class="pdf-toc-placeholder">
                     <i class="fas fa-arrow-left"></i>
-                    <p>Pick an entry from the list to view its page${(toc.sections || []).some(s => s.entries?.some(e => e.pageEnd && e.pageEnd > e.page)) ? '(s)' : ''}.</p>
+                    <p>Pick an entry from the list to view its page.</p>
                 </div>
             </main>
         </div>
     `;
 
-    renderPdfTocSidebar(node, toc, state);
+    renderPdfTocSidebar(node, state);
 
     // Restore last active entry on revisit
-    if (state.activeEntryId) {
-        const [si, ei] = state.activeEntryId.split('-').map(Number);
-        const sec = toc.sections[si];
-        const entry = sec?.entries[ei];
-        if (entry) loadPdfTocEntry(node, toc, entry, state.activeEntryId);
+    if (state.activePage) {
+        const entry = findMergedEntryByPage(state.merged, state.activePage);
+        if (entry) loadPdfTocEntry(node, entry);
     }
 
-    // Search wiring
     document.getElementById('pdfTocSearch').addEventListener('input', e => {
         state.query = e.target.value;
-        renderPdfTocSidebar(node, toc, state);
+        renderPdfTocSidebar(node, state);
     });
 
-    // Delegated click on TOC entries
     document.getElementById('pdfTocList').addEventListener('click', e => {
+        const editBtn = e.target.closest('[data-pdf-entry-edit]');
+        if (editBtn) {
+            e.preventDefault();
+            const page = Number(editBtn.dataset.pdfEntryEdit);
+            requireEditor(() => openPdfTocOverrideModal(node, page));
+            return;
+        }
         const link = e.target.closest('[data-pdf-entry-id]');
         if (!link) return;
         e.preventDefault();
-        const entryId = link.dataset.pdfEntryId;
-        const [si, ei] = entryId.split('-').map(Number);
-        const sec = toc.sections[si];
-        const entry = sec?.entries[ei];
-        if (entry) loadPdfTocEntry(node, toc, entry, entryId);
+        const page = Number(link.dataset.pdfEntryId);
+        const entry = findMergedEntryByPage(state.merged, page);
+        if (entry) loadPdfTocEntry(node, entry);
     });
 }
 
-function renderPdfTocSidebar(node, toc, state) {
+// Merge override list onto base TOC. Override fields (when present) win.
+// Sections retain their original order; brand-new categories appear at end.
+function mergePdfTocOverrides(baseToc, overrides) {
+    const ovByPage = {};
+    for (const o of overrides || []) {
+        if (o && o.page != null) ovByPage[o.page] = o;
+    }
+
+    const baseOrder = (baseToc.sections || []).map(s => s.title);
+    const extraOrder = [];
+    const buckets = new Map();
+    for (const t of baseOrder) buckets.set(t, []);
+
+    for (const sec of baseToc.sections || []) {
+        for (const e of sec.entries || []) {
+            const ov = ovByPage[e.page];
+            const merged = {
+                page: e.page,
+                pageEnd: e.pageEnd,
+                title: (ov && ov.title) || e.title,
+                section: (ov && ov.section) || sec.title,
+                _baseTitle: e.title,
+                _baseSection: sec.title,
+                _overridden: !!(ov && (ov.title || ov.section)),
+            };
+            if (!buckets.has(merged.section)) {
+                buckets.set(merged.section, []);
+                if (!baseOrder.includes(merged.section)) extraOrder.push(merged.section);
+            }
+            buckets.get(merged.section).push(merged);
+        }
+    }
+
+    const orderedNames = [...baseOrder, ...extraOrder];
+    const sections = orderedNames
+        .filter(name => (buckets.get(name) || []).length > 0)
+        .map(name => ({
+            title: name,
+            entries: buckets.get(name).slice().sort((a, b) => a.page - b.page),
+        }));
+
+    return { ...baseToc, sections };
+}
+
+function findMergedEntryByPage(merged, page) {
+    for (const sec of merged.sections || []) {
+        const e = sec.entries.find(x => x.page === page);
+        if (e) return e;
+    }
+    return null;
+}
+
+function getMergedSectionNames(merged) {
+    return (merged.sections || []).map(s => s.title);
+}
+
+function renderPdfTocSidebar(node, state) {
     const q = (state.query || '').trim().toLowerCase();
-    const sections = (toc.sections || []).map((sec, si) => {
-        const entries = (sec.entries || []).map((e, ei) => ({ ...e, _idx: ei })).filter(e => {
-            if (!q) return true;
-            return (e.title || '').toLowerCase().includes(q)
-                || (sec.title || '').toLowerCase().includes(q);
-        });
-        return { ...sec, _idx: si, entries };
-    }).filter(sec => sec.entries.length > 0);
+    const sections = (state.merged.sections || [])
+        .map(sec => ({
+            title: sec.title,
+            entries: sec.entries.filter(e => !q
+                || (e.title || '').toLowerCase().includes(q)
+                || (sec.title || '').toLowerCase().includes(q)),
+        }))
+        .filter(sec => sec.entries.length > 0);
 
     const listEl = document.getElementById('pdfTocList');
     const emptyEl = document.getElementById('pdfTocEmpty');
@@ -2329,19 +2408,28 @@ function renderPdfTocSidebar(node, toc, state) {
     }
     emptyEl.style.display = 'none';
 
+    const canEdit = !!state.overridesSection && editorReadyHtml();
+
     listEl.innerHTML = sections.map(sec => `
         <div class="pdf-toc-section">
             <div class="pdf-toc-section-title">${escapeHtml(sec.title || '')}</div>
             <ul class="pdf-toc-entries">
                 ${sec.entries.map(e => {
-                    const entryId = `${sec._idx}-${e._idx}`;
-                    const isActive = state.activeEntryId === entryId;
                     const page = Number(e.page) || 1;
+                    const isActive = state.activePage === e.page;
+                    const editBtn = canEdit
+                        ? `<button class="pdf-toc-entry-edit" data-pdf-entry-edit="${page}" title="Rename / recategorize" aria-label="Edit">
+                              <i class="fas fa-pencil-alt"></i>
+                           </button>`
+                        : '';
                     return `<li>
-                        <a href="#" class="pdf-toc-entry${isActive ? ' active' : ''}" data-pdf-entry-id="${entryId}">
-                            <span class="pdf-toc-entry-title">${escapeHtml(e.title || '')}</span>
-                            <span class="pdf-toc-entry-page">p.${page}</span>
-                        </a>
+                        <div class="pdf-toc-entry-row${e._overridden ? ' overridden' : ''}">
+                            <a href="#" class="pdf-toc-entry${isActive ? ' active' : ''}" data-pdf-entry-id="${page}">
+                                <span class="pdf-toc-entry-title">${escapeHtml(e.title || '')}${e._overridden ? '<i class="fas fa-circle pdf-toc-entry-dot" title="Edited" aria-hidden="true"></i>' : ''}</span>
+                                <span class="pdf-toc-entry-page">p.${page}</span>
+                            </a>
+                            ${editBtn}
+                        </div>
                     </li>`;
                 }).join('')}
             </ul>
@@ -2349,14 +2437,14 @@ function renderPdfTocSidebar(node, toc, state) {
     `).join('');
 }
 
-function loadPdfTocEntry(node, toc, entry, entryId) {
+function loadPdfTocEntry(node, entry) {
     const state = PDF_TOC_STATE[node.id];
-    state.activeEntryId = entryId;
+    state.activePage = entry.page;
 
     const viewer = document.getElementById('pdfTocViewer');
     const start = Number(entry.page) || 1;
     const end = Number(entry.pageEnd) || start;
-    const tmpl = toc.pageImagePath || 'docs/uw-flowsheets-pages/page-{n:03d}.jpg';
+    const tmpl = state.baseToc.pageImagePath || 'docs/uw-flowsheets-pages/page-{n:03d}.jpg';
 
     let html = '';
     for (let n = start; n <= end; n++) {
@@ -2370,18 +2458,146 @@ function loadPdfTocEntry(node, toc, entry, entryId) {
     viewer.innerHTML = html;
     viewer.scrollTop = 0;
 
-    // Highlight active TOC entry
     document.querySelectorAll('.pdf-toc-entry.active').forEach(el => el.classList.remove('active'));
-    const el = document.querySelector(`[data-pdf-entry-id="${CSS.escape(entryId)}"]`);
+    const el = document.querySelector(`[data-pdf-entry-id="${start}"]`);
     if (el) el.classList.add('active');
 
-    // Update header (page range)
     const actions = refActions();
     const pages = (start === end) ? `p.${start}` : `p.${start}–${end}`;
     actions.innerHTML = `<span class="text-muted small me-2">${pages}</span>
-        <a href="${escapeHtml(toc.pdfPath)}#page=${start}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+        <a href="${escapeHtml(state.baseToc.pdfPath)}#page=${start}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-file-pdf me-1"></i>PDF
         </a>`;
+}
+
+// ----- PDF TOC override editor modal -----
+
+function openPdfTocOverrideModal(node, page) {
+    const state = PDF_TOC_STATE[node.id];
+    if (!state || !state.overridesSection) {
+        toast('Overrides not configured for this TOC.', 'error');
+        return;
+    }
+    const entry = findMergedEntryByPage(state.merged, page);
+    if (!entry) {
+        toast(`Could not find entry for page ${page}.`, 'error');
+        return;
+    }
+    const existingOverride = (state.overrides || []).find(o => o.page === page);
+
+    // Stash context for the save handler
+    REFERENCE_STATE.pdfTocEditCtx = { node, page, entry, existingOverride };
+
+    // Populate the modal
+    document.getElementById('pdfTocOverrideLabel').textContent =
+        `Edit entry — page ${page}`;
+    document.getElementById('pdfTocOverrideTitle').value = entry.title || '';
+    document.getElementById('pdfTocOverrideBase').textContent =
+        `Default: "${entry._baseTitle}" in ${entry._baseSection}`;
+
+    const sel = document.getElementById('pdfTocOverrideSection');
+    const sections = Array.from(new Set([
+        ...getMergedSectionNames(state.merged),
+        entry._baseSection,
+    ])).filter(Boolean);
+    sel.innerHTML = sections.map(s =>
+        `<option value="${escapeHtml(s)}"${s === entry.section ? ' selected' : ''}>${escapeHtml(s)}</option>`
+    ).join('');
+
+    document.getElementById('pdfTocOverrideNewCat').value = '';
+    document.getElementById('pdfTocOverrideReset').style.display = existingOverride ? 'inline-block' : 'none';
+
+    if (!REFERENCE_STATE.pdfTocOverrideModal) {
+        REFERENCE_STATE.pdfTocOverrideModal = new bootstrap.Modal(document.getElementById('pdfTocOverrideModal'));
+    }
+    REFERENCE_STATE.pdfTocOverrideModal.show();
+}
+
+async function savePdfTocOverride() {
+    const ctx = REFERENCE_STATE.pdfTocEditCtx;
+    if (!ctx) return;
+    const { node, page, entry, existingOverride } = ctx;
+    const state = PDF_TOC_STATE[node.id];
+
+    const newTitle = document.getElementById('pdfTocOverrideTitle').value.trim();
+    const newCat = document.getElementById('pdfTocOverrideNewCat').value.trim();
+    const section = newCat || document.getElementById('pdfTocOverrideSection').value;
+
+    if (!newTitle) { toast('Title is required.', 'error'); return; }
+
+    // Only persist diff vs base — keeps storage tidy + makes "reset" trivial.
+    const override = {
+        id: `p${page}`,
+        page,
+        ...(newTitle !== entry._baseTitle ? { title: newTitle } : {}),
+        ...(section !== entry._baseSection ? { section } : {}),
+        updatedAt: new Date().toISOString(),
+    };
+
+    // If nothing differs from the base AND there's no existing override, just close.
+    const onlyDefaults = !override.title && !override.section;
+    if (onlyDefaults && !existingOverride) {
+        REFERENCE_STATE.pdfTocOverrideModal.hide();
+        return;
+    }
+    // If the user reverted everything to defaults, treat as delete.
+    if (onlyDefaults && existingOverride) {
+        await deletePdfTocOverride();
+        return;
+    }
+
+    const password = EDITOR_STATE.apiPassword;
+    if (!password) { toast('Editor not unlocked.', 'error'); return; }
+
+    const btn = document.getElementById('pdfTocOverrideSave');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+
+    try {
+        const url = `/api/list/${encodeURIComponent(state.overridesSection)}` +
+            (existingOverride ? `/${encodeURIComponent(override.id)}` : '');
+        const r = await fetch(url, {
+            method: existingOverride ? 'PUT' : 'POST',
+            headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(override),
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        toast(existingOverride ? 'Updated.' : 'Saved.', 'success');
+        REFERENCE_STATE.pdfTocOverrideModal.hide();
+        renderPdfToc(node);   // refresh
+    } catch (e) {
+        toast(`Save failed: ${e.message}`, 'error', { duration: 5000 });
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>Save';
+    }
+}
+
+async function deletePdfTocOverride() {
+    const ctx = REFERENCE_STATE.pdfTocEditCtx;
+    if (!ctx || !ctx.existingOverride) return;
+    const { node, existingOverride } = ctx;
+    const state = PDF_TOC_STATE[node.id];
+    const password = EDITOR_STATE.apiPassword;
+    if (!password) { toast('Editor not unlocked.', 'error'); return; }
+
+    try {
+        const r = await fetch(`/api/list/${encodeURIComponent(state.overridesSection)}/${encodeURIComponent(existingOverride.id)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${password}` },
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        toast('Reverted to default.', 'success');
+        REFERENCE_STATE.pdfTocOverrideModal.hide();
+        renderPdfToc(node);
+    } catch (e) {
+        toast(`Reset failed: ${e.message}`, 'error', { duration: 5000 });
+    }
 }
 
 // ----- Render a single list-item card -----

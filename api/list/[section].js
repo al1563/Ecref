@@ -10,11 +10,12 @@ import { getList, addListItem, isKvConfigured } from '../../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../../lib/auth.js';
 
 const SECTIONS = {
-    'ebm':              { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
-    'uw':               { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
-    'abx-extras':       { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
-    'uci-antibiogram':  { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
-    'mksap':            { writeAuth: 'MKSAP_PASSWORD',  publicRead: false },
+    'ebm':                { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'uw':                 { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'abx-extras':         { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'uci-antibiogram':    { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'uw-toc-overrides':   { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'mksap':              { writeAuth: 'MKSAP_PASSWORD',  publicRead: false },
 };
 
 export default async function handler(req, res) {

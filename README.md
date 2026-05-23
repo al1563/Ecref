@@ -323,6 +323,18 @@ The MKSAP password lives in `sessionStorage` once unlocked (cleared when the bro
 
 Both layers must use the same password — the client uses it to unlock the UI, and sends it as the bearer token; the server uses it as the expected password.
 
+### Editing the UWorld Flow Sheet TOC in-browser
+
+Each entry in the UWorld sub-TOC has a pencil icon (visible on hover when the editor is unlocked). Clicking it opens a small modal where you can:
+
+- Rename the entry (fix OCR misreads)
+- Move it to a different category (existing category dropdown, or type a new category name)
+- Reset to default (only shown if this entry is currently overridden)
+
+Edits live in the KV section `uw-toc-overrides` — one record per overridden page, keyed by `p<page-number>`. The renderer fetches the base `uw-flowsheets-toc.json` plus the overrides, merges them (override wins per field), and renders. The orange dot next to an entry title means "this entry has been edited from the default."
+
+Why an overrides layer instead of editing the base JSON directly? The base JSON is version-controlled in the repo and represents the OCR-generated defaults; if you re-run OCR (e.g., after improving the script), your manual edits aren't lost. Overrides survive any re-OCR. To wipe all overrides and start fresh: delete every item in the `uw-toc-overrides` KV section (or visit `/seed.html` and inspect — though the seed tool only manages the main KB store right now).
+
 ### Adding new reference sections (developer)
 
 To add a new editable list section (e.g., "Procedure videos"):
@@ -362,4 +374,4 @@ python3 -m http.server 8000
 ```
 
 **Last Updated:** May 2026
-**Version:** 2026.4
+**Version:** 2026.6

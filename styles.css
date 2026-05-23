@@ -1702,3 +1702,40 @@ table.dataTable tbody td {
         min-height: 60vh;
     }
 }
+
+/* --- PDF TOC override editor: pencil icon + "edited" dot --- */
+.pdf-toc-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+.pdf-toc-entry-row .pdf-toc-entry { flex: 1; min-width: 0; }
+.pdf-toc-entry-edit {
+    flex-shrink: 0;
+    background: none;
+    border: 0;
+    color: #aaa;
+    padding: 4px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.1s, color 0.1s, background 0.1s;
+    font-size: 0.72rem;
+}
+.pdf-toc-entry-row:hover .pdf-toc-entry-edit,
+.pdf-toc-entry-edit:focus {
+    opacity: 1;
+}
+.pdf-toc-entry-edit:hover {
+    color: var(--uci-blue);
+    background: #eef4fa;
+}
+.pdf-toc-entry-row.overridden .pdf-toc-entry-edit { opacity: 0.5; }
+.pdf-toc-entry-row.overridden:hover .pdf-toc-entry-edit { opacity: 1; }
+.pdf-toc-entry-dot {
+    color: #f0ad4e;
+    font-size: 0.4rem;
+    vertical-align: middle;
+    margin-left: 5px;
+}
+.pdf-toc-entry.active .pdf-toc-entry-dot { color: rgba(255, 255, 255, 0.9); }

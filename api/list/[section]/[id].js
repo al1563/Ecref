@@ -6,11 +6,12 @@ import { updateListItem, deleteListItem, isKvConfigured } from '../../../lib/kv.
 import { checkAuth, sendUnauthorized } from '../../../lib/auth.js';
 
 const SECTIONS = {
-    'ebm':              { writeAuth: 'EDITOR_PASSWORD' },
-    'uw':               { writeAuth: 'EDITOR_PASSWORD' },
-    'abx-extras':       { writeAuth: 'EDITOR_PASSWORD' },
-    'uci-antibiogram':  { writeAuth: 'EDITOR_PASSWORD' },
-    'mksap':            { writeAuth: 'MKSAP_PASSWORD'  },
+    'ebm':                { writeAuth: 'EDITOR_PASSWORD' },
+    'uw':                 { writeAuth: 'EDITOR_PASSWORD' },
+    'abx-extras':         { writeAuth: 'EDITOR_PASSWORD' },
+    'uci-antibiogram':    { writeAuth: 'EDITOR_PASSWORD' },
+    'uw-toc-overrides':   { writeAuth: 'EDITOR_PASSWORD' },
+    'mksap':              { writeAuth: 'MKSAP_PASSWORD'  },
 };
 
 export default async function handler(req, res) {
