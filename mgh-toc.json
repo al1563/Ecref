@@ -1,6 +1,6 @@
 {
-  "pdfPath": "docs/MGH-2526-handbook.pdf",
-  "pageImagePath": "docs/mgh-pages/page-{n:03d}.jpg",
+  "pdfPath": "https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/MGH-2526-handbook.pdf",
+  "pageImagePath": "https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/mgh-pages/page-{n:03d}.jpg",
   "totalPages": 270,
   "subtitle": "Auto-generated from PDF bookmarks. Pages render as images for fast loading.",
   "sections": [

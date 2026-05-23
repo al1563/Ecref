@@ -1809,14 +1809,14 @@ function renderHandbook() {
 const REFERENCE_TOC = [
     { id: 'g-antibiotics', title: 'Antibiotics', icon: 'fa-pills', items: [
         { id: 'abx-guide',       title: 'Antibiotics guide',     icon: 'fa-file-image', type: 'poster',
-          src: 'docs/abx-guide-pages/page-1.jpg',
+          src: 'https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/abx-guide-pages/page-1.jpg',
           caption: 'Northwestern Introductory Guide to Antibiotics',
-          pdf: 'docs/nu-introductory-guide-to-antibiotics.pdf' },
+          pdf: 'https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/nu-introductory-guide-to-antibiotics.pdf' },
         { id: 'bugdrugdx',       title: 'BugDrugDx',             icon: 'fa-bug',        type: 'embed',
           url: 'https://bugdrugdx.com/',
           description: 'Cross-reference antibiotics, bugs, and infection types.' },
         { id: 'abx-venn',        title: 'Abx Venn diagram',      icon: 'fa-circle-dot', type: 'poster',
-          src: 'docs/abx_venn.png',
+          src: 'https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/abx_venn.png',
           caption: 'Antibiotic spectrum overlap.' },
         { id: 'uci-antibiogram', title: 'UCI Antibiogram',       icon: 'fa-microscope', type: 'antibiogram',
           section: 'uci-antibiogram',

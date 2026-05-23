@@ -1,7 +1,7 @@
 {
   "title": "UWorld Boards Flow Sheets & Tables",
-  "pdfPath": "docs/UWORLD_boards_flow_sheet_tables.pdf",
-  "pageImagePath": "docs/uw-flowsheets-pages/page-{n:03d}.jpg",
+  "pdfPath": "https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/UWORLD_boards_flow_sheet_tables.pdf",
+  "pageImagePath": "https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/uw-flowsheets-pages/page-{n:03d}.jpg",
   "sections": [
     {
       "title": "Cardiology",

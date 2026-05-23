@@ -7,3 +7,13 @@
 
 # Local-only encryption helper — never deploy to GitHub Pages
 tools/
+.vercel
+.env*.local
+
+# Source PDFs + chopped page JPGs — served from Cloudflare R2 instead.
+# To re-upload after editing locally: see tools/upload-to-r2.js
+docs/*.pdf
+docs/abx_venn.png
+docs/abx-guide-pages/
+docs/mgh-pages/
+docs/uw-flowsheets-pages/
