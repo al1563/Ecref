@@ -1831,9 +1831,12 @@ const REFERENCE_TOC = [
     { id: 'ebm', title: 'EBM articles', icon: 'fa-flask', type: 'list',
       section: 'ebm', dailyPick: true,
       subtitle: 'Landmark trials and evidence-based reference articles. One pick surfaces daily.' },
-    { id: 'uw', title: 'UW Learning Objectives', icon: 'fa-graduation-cap', type: 'list',
-      section: 'uw',
-      subtitle: 'UWorld learning objectives — track what you\'ve learned.' },
+    { id: 'g-uworld', title: 'UWorld', icon: 'fa-graduation-cap', items: [
+        { id: 'uw-flowsheets', title: 'Flow Sheet Tables', icon: 'fa-table-list',
+          type: 'pdf-toc',
+          tocJson: 'uw-flowsheets-toc.json',
+          subtitle: 'UWorld boards review tables and flowcharts (163 pages).' },
+    ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
       section: 'mksap', dailyPick: true,
       subtitle: 'Password-gated. Boards Basics notes from your MKSAP account.' },
@@ -1973,6 +1976,7 @@ function loadReferenceItem(id) {
     const viewer = refViewer();
     viewer.style.display = 'block';
     viewer.classList.remove('fill');
+    viewer.classList.remove('pdf-toc-host');
     viewer.scrollTop = 0;
 
     switch (node.type) {
@@ -1982,6 +1986,7 @@ function loadReferenceItem(id) {
         case 'external':    return renderExternal(node);
         case 'list':        return renderListSection(node);
         case 'mksap':       return renderMksapSection(node);
+        case 'pdf-toc':     return renderPdfToc(node);
         default:
             viewer.innerHTML = `<div class="alert alert-warning">Unknown reference type: ${escapeHtml(node.type || '')}</div>`;
     }
@@ -2215,6 +2220,168 @@ async function renderMksapSection(node) {
 
     viewer.querySelectorAll('img').forEach(im => im.addEventListener('click', e => openImageModal(e.target.src)));
     wireListActions(viewer, node.section);
+}
+
+// ----- PDF TOC viewer (sub-TOC + page-image viewer inside right pane) -----
+// Used for UWORLD flow sheets and any other PDF you want to surface inside
+// Reference. The viewer fills the right pane with a two-column layout:
+// sub-TOC on the left (240px, scrollable, searchable) and the page-image
+// stack on the right.
+
+const PDF_TOC_CACHE = {};   // path -> parsed JSON
+const PDF_TOC_STATE = {};   // pdf-toc node id -> { activeEntryId, query }
+
+async function renderPdfToc(node) {
+    const viewer = refViewer();
+    // The pdf-toc layout needs the viewer to be a flex column so the inner
+    // grid can fill the right pane. Padding is removed so the viewer/sidebar
+    // can use the full height.
+    viewer.classList.add('pdf-toc-host');
+    viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading ${escapeHtml(node.title)}...</div>`;
+
+    let toc;
+    try {
+        toc = PDF_TOC_CACHE[node.tocJson]
+            ?? (PDF_TOC_CACHE[node.tocJson] = await fetch(node.tocJson, { cache: 'no-store' }).then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            }));
+    } catch (e) {
+        viewer.innerHTML = `<div class="alert alert-warning">Couldn't load <code>${escapeHtml(node.tocJson)}</code>: ${escapeHtml(e.message)}</div>`;
+        return;
+    }
+
+    const state = PDF_TOC_STATE[node.id] ||= { activeEntryId: null, query: '' };
+    const totalEntries = (toc.sections || []).reduce((n, s) => n + (s.entries?.length || 0), 0);
+
+    refActions().innerHTML = `<span class="text-muted small">${totalEntries} entries</span>
+        <a href="${escapeHtml(toc.pdfPath)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="fas fa-file-pdf me-1"></i>PDF
+        </a>`;
+
+    viewer.innerHTML = `
+        <div class="pdf-toc-layout">
+            <aside class="pdf-toc-sidebar">
+                <div class="pdf-toc-search-wrap">
+                    <input type="search" class="form-control form-control-sm" id="pdfTocSearch" placeholder="Search ${escapeHtml(toc.title || 'entries')}...">
+                </div>
+                <div class="pdf-toc-list" id="pdfTocList"></div>
+                <div class="pdf-toc-empty text-muted text-center py-3" id="pdfTocEmpty" style="display:none;">
+                    <i class="fas fa-search me-2"></i>No matches.
+                </div>
+            </aside>
+            <main class="pdf-toc-viewer" id="pdfTocViewer">
+                <div class="pdf-toc-placeholder">
+                    <i class="fas fa-arrow-left"></i>
+                    <p>Pick an entry from the list to view its page${(toc.sections || []).some(s => s.entries?.some(e => e.pageEnd && e.pageEnd > e.page)) ? '(s)' : ''}.</p>
+                </div>
+            </main>
+        </div>
+    `;
+
+    renderPdfTocSidebar(node, toc, state);
+
+    // Restore last active entry on revisit
+    if (state.activeEntryId) {
+        const [si, ei] = state.activeEntryId.split('-').map(Number);
+        const sec = toc.sections[si];
+        const entry = sec?.entries[ei];
+        if (entry) loadPdfTocEntry(node, toc, entry, state.activeEntryId);
+    }
+
+    // Search wiring
+    document.getElementById('pdfTocSearch').addEventListener('input', e => {
+        state.query = e.target.value;
+        renderPdfTocSidebar(node, toc, state);
+    });
+
+    // Delegated click on TOC entries
+    document.getElementById('pdfTocList').addEventListener('click', e => {
+        const link = e.target.closest('[data-pdf-entry-id]');
+        if (!link) return;
+        e.preventDefault();
+        const entryId = link.dataset.pdfEntryId;
+        const [si, ei] = entryId.split('-').map(Number);
+        const sec = toc.sections[si];
+        const entry = sec?.entries[ei];
+        if (entry) loadPdfTocEntry(node, toc, entry, entryId);
+    });
+}
+
+function renderPdfTocSidebar(node, toc, state) {
+    const q = (state.query || '').trim().toLowerCase();
+    const sections = (toc.sections || []).map((sec, si) => {
+        const entries = (sec.entries || []).map((e, ei) => ({ ...e, _idx: ei })).filter(e => {
+            if (!q) return true;
+            return (e.title || '').toLowerCase().includes(q)
+                || (sec.title || '').toLowerCase().includes(q);
+        });
+        return { ...sec, _idx: si, entries };
+    }).filter(sec => sec.entries.length > 0);
+
+    const listEl = document.getElementById('pdfTocList');
+    const emptyEl = document.getElementById('pdfTocEmpty');
+
+    if (!sections.length) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+    }
+    emptyEl.style.display = 'none';
+
+    listEl.innerHTML = sections.map(sec => `
+        <div class="pdf-toc-section">
+            <div class="pdf-toc-section-title">${escapeHtml(sec.title || '')}</div>
+            <ul class="pdf-toc-entries">
+                ${sec.entries.map(e => {
+                    const entryId = `${sec._idx}-${e._idx}`;
+                    const isActive = state.activeEntryId === entryId;
+                    const page = Number(e.page) || 1;
+                    return `<li>
+                        <a href="#" class="pdf-toc-entry${isActive ? ' active' : ''}" data-pdf-entry-id="${entryId}">
+                            <span class="pdf-toc-entry-title">${escapeHtml(e.title || '')}</span>
+                            <span class="pdf-toc-entry-page">p.${page}</span>
+                        </a>
+                    </li>`;
+                }).join('')}
+            </ul>
+        </div>
+    `).join('');
+}
+
+function loadPdfTocEntry(node, toc, entry, entryId) {
+    const state = PDF_TOC_STATE[node.id];
+    state.activeEntryId = entryId;
+
+    const viewer = document.getElementById('pdfTocViewer');
+    const start = Number(entry.page) || 1;
+    const end = Number(entry.pageEnd) || start;
+    const tmpl = toc.pageImagePath || 'docs/uw-flowsheets-pages/page-{n:03d}.jpg';
+
+    let html = '';
+    for (let n = start; n <= end; n++) {
+        const src = tmpl.replace('{n:03d}', String(n).padStart(3, '0'));
+        const eager = (n === start) ? 'eager' : 'lazy';
+        html += `<figure class="pdf-toc-page">
+            <img src="${escapeHtml(src)}" alt="Page ${n}" loading="${eager}" decoding="async">
+            <figcaption>p.${n}</figcaption>
+        </figure>`;
+    }
+    viewer.innerHTML = html;
+    viewer.scrollTop = 0;
+
+    // Highlight active TOC entry
+    document.querySelectorAll('.pdf-toc-entry.active').forEach(el => el.classList.remove('active'));
+    const el = document.querySelector(`[data-pdf-entry-id="${CSS.escape(entryId)}"]`);
+    if (el) el.classList.add('active');
+
+    // Update header (page range)
+    const actions = refActions();
+    const pages = (start === end) ? `p.${start}` : `p.${start}–${end}`;
+    actions.innerHTML = `<span class="text-muted small me-2">${pages}</span>
+        <a href="${escapeHtml(toc.pdfPath)}#page=${start}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-file-pdf me-1"></i>PDF
+        </a>`;
 }
 
 // ----- Render a single list-item card -----

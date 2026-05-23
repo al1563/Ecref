@@ -1561,3 +1561,144 @@ table.dataTable tbody td {
         min-height: 60vh;
     }
 }
+
+/* =====================================================================
+   PDF TOC viewer — embedded inside Reference right pane (UWORLD)
+   ===================================================================== */
+
+.pdf-toc-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 0.6rem;
+    height: 100%;
+    min-height: 0; /* allow children to shrink under flex parent */
+}
+.pdf-toc-sidebar {
+    display: flex;
+    flex-direction: column;
+    background: #fafbfc;
+    border: 1px solid #e5e9ee;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 0;
+}
+.pdf-toc-search-wrap {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #e5e9ee;
+    flex-shrink: 0;
+}
+.pdf-toc-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.4rem 0.6rem 0.8rem;
+}
+.pdf-toc-section { margin-bottom: 0.8rem; }
+.pdf-toc-section:last-child { margin-bottom: 0; }
+.pdf-toc-section-title {
+    color: var(--uci-blue);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.3rem 0.2rem 0.25rem;
+    border-bottom: 1px solid #e5e9ee;
+    margin-bottom: 0.25rem;
+}
+.pdf-toc-entries { list-style: none; padding: 0; margin: 0; }
+.pdf-toc-entries li { margin-bottom: 1px; }
+.pdf-toc-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.3rem 0.45rem;
+    border-radius: 4px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.pdf-toc-entry:hover { background: #eef4fa; color: var(--uci-blue); }
+.pdf-toc-entry.active {
+    background: var(--uci-blue);
+    color: white;
+    font-weight: 500;
+}
+.pdf-toc-entry.active .pdf-toc-entry-page { color: rgba(255, 255, 255, 0.85); }
+.pdf-toc-entry-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pdf-toc-entry-page {
+    color: #999;
+    font-size: 0.72rem;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+.pdf-toc-entry:hover .pdf-toc-entry-page { color: var(--uci-blue); }
+
+.pdf-toc-viewer {
+    background: #525659;
+    border-radius: 6px;
+    overflow-y: auto;
+    padding: 0.8rem;
+    min-height: 0;
+}
+.pdf-toc-page {
+    margin: 0 auto 0.7rem;
+    max-width: 100%;
+    text-align: center;
+}
+.pdf-toc-page:last-child { margin-bottom: 0; }
+.pdf-toc-page img {
+    max-width: 100%;
+    height: auto;
+    background: white;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    display: block;
+    margin: 0 auto;
+}
+.pdf-toc-page figcaption {
+    color: #bbb;
+    font-size: 0.72rem;
+    margin-top: 0.25rem;
+}
+.pdf-toc-placeholder {
+    color: #ccc;
+    text-align: center;
+    padding: 4rem 1rem;
+}
+.pdf-toc-placeholder i {
+    font-size: 3rem;
+    color: #aaa;
+    margin-bottom: 0.8rem;
+    display: block;
+}
+
+/* When hosting a pdf-toc layout, the right pane becomes a flex column with
+   tight padding so the inner grid can stretch to fill the height. */
+.reference-viewer-body.pdf-toc-host {
+    padding: 0.6rem !important;
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Mobile: stack TOC over viewer */
+@media (max-width: 767.98px) {
+    .pdf-toc-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    .pdf-toc-sidebar {
+        max-height: 50vh;
+    }
+    .pdf-toc-viewer {
+        min-height: 60vh;
+    }
+}

@@ -1,0 +1,724 @@
+{
+  "title": "UWorld Boards Flow Sheets & Tables",
+  "pdfPath": "docs/UWORLD_boards_flow_sheet_tables.pdf",
+  "pageImagePath": "docs/uw-flowsheets-pages/page-{n:03d}.jpg",
+  "sections": [
+    {
+      "title": "Cardiology",
+      "entries": [
+        {
+          "title": "Abdominal aortic aneurysm",
+          "page": 4
+        },
+        {
+          "title": "Chronic venous stasis",
+          "page": 5
+        },
+        {
+          "title": "Primary Raynaud\u2019s Secondary Raynaud\u2019s",
+          "page": 19
+        },
+        {
+          "title": "Peripartum cardiomyopathy",
+          "page": 31
+        },
+        {
+          "title": "Syncope with electrocardiographic monitoring",
+          "page": 38
+        },
+        {
+          "title": "Constrictive pericarditis",
+          "page": 39
+        },
+        {
+          "title": "Acute pericarditis",
+          "page": 56
+        },
+        {
+          "title": "Chronic mitral regurgitation Symptomatic",
+          "page": 72
+        },
+        {
+          "title": "Aneurysmal compression of oculomotor nerve",
+          "page": 85
+        },
+        {
+          "title": "Hypertension & hypokalemia",
+          "page": 92
+        },
+        {
+          "title": "Preoperative cardiac evaluation for noncardiac surgery",
+          "page": 106
+        },
+        {
+          "title": "Hypertension in proteinuric chronic",
+          "page": 150
+        },
+        {
+          "title": "Ausculation of cardiac murmurs",
+          "page": 160
+        }
+      ]
+    },
+    {
+      "title": "Pulmonary",
+      "entries": [
+        {
+          "title": "Fluid management in ARDS",
+          "page": 16
+        },
+        {
+          "title": "Parapneumonic effusion",
+          "page": 20
+        },
+        {
+          "title": "Silicosis",
+          "page": 21
+        },
+        {
+          "title": "Asthma Symptom Nighttime Medication management",
+          "page": 32
+        },
+        {
+          "title": "Intubation",
+          "page": 33
+        },
+        {
+          "title": "Epidemiology and extrapulmonary clinical manifestations of endemic mycoses",
+          "page": 61
+        },
+        {
+          "title": "Suspected PH",
+          "page": 64
+        },
+        {
+          "title": "Suspected PE",
+          "page": 90
+        },
+        {
+          "title": "Aspirin-exacerbated respiratory disease",
+          "page": 107
+        },
+        {
+          "title": "Clues for increasing index of suspicion for Legionella pneumonia",
+          "page": 113
+        },
+        {
+          "title": "Disseminated histoplasmosis",
+          "page": 119
+        },
+        {
+          "title": "V/Q scan results based on pretest probability for PE",
+          "page": 136
+        },
+        {
+          "title": "CURB-65 to determine hospitalization",
+          "page": 137
+        },
+        {
+          "title": "Acute eosinophilic pneumonia Chronic eosinophilic pneumonia",
+          "page": 138
+        },
+        {
+          "title": "Assessment of malignancy risk for solitary pulmonary nodule",
+          "page": 140
+        },
+        {
+          "title": "Solitary pulmonary nodule",
+          "page": 141
+        },
+        {
+          "title": "Pulmonary weaning from vent",
+          "page": 144
+        }
+      ]
+    },
+    {
+      "title": "GI",
+      "entries": [
+        {
+          "title": "Abnormal aminotransferases",
+          "page": 2
+        },
+        {
+          "title": "Suspected factitious diarrhea",
+          "page": 8
+        },
+        {
+          "title": "Common causes of persistent bowel symptoms in celiac sprue",
+          "page": 15
+        },
+        {
+          "title": "A \u2018 Intervals for follow-up colonoscopy after polypectomy",
+          "page": 18
+        },
+        {
+          "title": "Overview of subarachnoid hemorrhage",
+          "page": 23
+        },
+        {
+          "title": "Acute diarrhea",
+          "page": 51
+        },
+        {
+          "title": "Acute mesenteric ischemia | Chronic mesenteric ischemia",
+          "page": 54
+        },
+        {
+          "title": "Suspected gastrinoma",
+          "page": 66
+        },
+        {
+          "title": "Irritable bowel syndrome",
+          "page": 89
+        },
+        {
+          "title": "Evaluation & management of Barrett esophagus",
+          "page": 97
+        },
+        {
+          "title": "Suspected variceal hemorrhage",
+          "page": 105
+        },
+        {
+          "title": "Suspected pancreatic malignancy",
+          "page": 114
+        },
+        {
+          "title": "Ascites",
+          "page": 133
+        },
+        {
+          "title": "Intervals for follow-up colonoscopy after polypectomy",
+          "page": 139
+        },
+        {
+          "title": "Wilson disease",
+          "page": 142
+        },
+        {
+          "title": "Rectovaginal fistula Non-IBD related",
+          "page": 143
+        },
+        {
+          "title": "Liver nodule",
+          "page": 148
+        },
+        {
+          "title": "Acute upper Gl bleed",
+          "page": 157
+        }
+      ]
+    },
+    {
+      "title": "Renal",
+      "entries": [
+        {
+          "title": "Adrenal incidentaloma",
+          "page": 11
+        },
+        {
+          "title": "Magnesium deficiency",
+          "page": 12
+        },
+        {
+          "title": "Renal cell cancer",
+          "page": 46
+        },
+        {
+          "title": "Water deprivation test",
+          "page": 121
+        },
+        {
+          "title": "Hyperphosphatemia in stage 3-5",
+          "page": 126
+        },
+        {
+          "title": "Adult minimal change disease",
+          "page": 130
+        },
+        {
+          "title": "Adrenal incidentaloma",
+          "page": 162
+        }
+      ]
+    },
+    {
+      "title": "ID",
+      "entries": [
+        {
+          "title": "Testicular cancer",
+          "page": 3
+        },
+        {
+          "title": "Imaging features suggestive of",
+          "page": 13
+        },
+        {
+          "title": "Babesiosis",
+          "page": 22
+        },
+        {
+          "title": "Strongyloidiasis",
+          "page": 25
+        },
+        {
+          "title": "Symptomatic neurosyphilis",
+          "page": 26
+        },
+        {
+          "title": "Positive nontreponemal testing after syphilis treatment",
+          "page": 29
+        },
+        {
+          "title": "Neisseria meningitidis",
+          "page": 47
+        },
+        {
+          "title": "Diagnostic approach to hypercalcemia",
+          "page": 55
+        },
+        {
+          "title": "Prevention of catheter-related infections",
+          "page": 58
+        },
+        {
+          "title": "Dengue fever",
+          "page": 65
+        },
+        {
+          "title": "Gastrointestinal bleeding",
+          "page": 71
+        },
+        {
+          "title": "Lemierre\u2019s syndrome",
+          "page": 73
+        },
+        {
+          "title": "HSV encephalitis",
+          "page": 93
+        },
+        {
+          "title": "Nocardiosis",
+          "page": 102
+        },
+        {
+          "title": "HIV-negative MAC",
+          "page": 103
+        },
+        {
+          "title": "Syphilis",
+          "page": 108
+        },
+        {
+          "title": "Acute HIV infection",
+          "page": 120
+        },
+        {
+          "title": "Recurrent aphthous stomatitis",
+          "page": 123
+        },
+        {
+          "title": "Diagnostic criteria for RADS",
+          "page": 128
+        },
+        {
+          "title": "Adult-onset Still\u2019s disease",
+          "page": 132
+        },
+        {
+          "title": "Characteristics of chronic primary headaches",
+          "page": 155
+        },
+        {
+          "title": "Recommended antimalaria chemoprophylaxis options for",
+          "page": 156
+        },
+        {
+          "title": "Diagnostic criteria for MAC",
+          "page": 158
+        },
+        {
+          "title": "Diagnostic criteria for multiple myeloma",
+          "page": 159
+        },
+        {
+          "title": "Dengue fever",
+          "page": 161
+        }
+      ]
+    },
+    {
+      "title": "Neuro",
+      "entries": [
+        {
+          "title": "Initial management of dyspepsia",
+          "page": 27
+        },
+        {
+          "title": "Central retinal artery occlusion",
+          "page": 43
+        },
+        {
+          "title": "Myasthenia gravis",
+          "page": 52
+        },
+        {
+          "title": "Initial management of dyspepsia",
+          "page": 68
+        },
+        {
+          "title": "Multiple sclerosis",
+          "page": 77
+        },
+        {
+          "title": "Corneal abrasion",
+          "page": 110
+        },
+        {
+          "title": "Myasthenia gravis",
+          "page": 115
+        },
+        {
+          "title": "Treatment options for diabetic peripheral neuropathy",
+          "page": 151
+        },
+        {
+          "title": "Acute, painful vision loss",
+          "page": 152
+        }
+      ]
+    },
+    {
+      "title": "Heme/Onc",
+      "entries": [
+        {
+          "title": "Acute sickle cell chest syndrome",
+          "page": 7
+        },
+        {
+          "title": "Elevated PT &/or PTT",
+          "page": 34
+        },
+        {
+          "title": "ASCUS",
+          "page": 37
+        },
+        {
+          "title": "Lymphadenopathy",
+          "page": 40
+        },
+        {
+          "title": "Thrombocytopenia",
+          "page": 41
+        },
+        {
+          "title": "CML",
+          "page": 44
+        },
+        {
+          "title": "Carcinoid syndrome",
+          "page": 49
+        },
+        {
+          "title": "Thalassemias",
+          "page": 53
+        },
+        {
+          "title": "Common RBC abnormalities seen on peripheral smear",
+          "page": 57
+        },
+        {
+          "title": "Neurogenic & vascular claudication",
+          "page": 59
+        },
+        {
+          "title": "Indications for repeat endoscopy",
+          "page": 60
+        },
+        {
+          "title": "Bleeding disorders",
+          "page": 67
+        },
+        {
+          "title": "ITP treatment in adults",
+          "page": 69
+        },
+        {
+          "title": "Febrile neutropenia",
+          "page": 70
+        },
+        {
+          "title": "Follow-up surveillance of papillary thyroid cancer",
+          "page": 74
+        },
+        {
+          "title": "Locally advanced rectal cancer",
+          "page": 75
+        },
+        {
+          "title": "Elevated PSA",
+          "page": 86
+        },
+        {
+          "title": "Indications for specialized RBC treatments",
+          "page": 91
+        },
+        {
+          "title": "Brachial plexopathy in cancer patients",
+          "page": 95
+        },
+        {
+          "title": "Breast pain",
+          "page": 104
+        },
+        {
+          "title": "Clinical manifestations of amyloidosis (primary & secondary)",
+          "page": 109
+        },
+        {
+          "title": "Autoimmune hemolytic anemia",
+          "page": 125
+        },
+        {
+          "title": "Hereditary hemorrhagic telangiectasia",
+          "page": 127
+        },
+        {
+          "title": "Cervical actinomycosis",
+          "page": 131
+        },
+        {
+          "title": "Porphyria cutanea tarda",
+          "page": 135
+        },
+        {
+          "title": "Criteria for the diagnosis of transfusion-associated",
+          "page": 154
+        }
+      ]
+    },
+    {
+      "title": "Endo",
+      "entries": [
+        {
+          "title": "Choice of treatment in Graves",
+          "page": 24
+        },
+        {
+          "title": "Prenatal diabetes screening",
+          "page": 42
+        },
+        {
+          "title": "Thyroid nodule",
+          "page": 48
+        },
+        {
+          "title": "Pituitary incidentaloma",
+          "page": 63
+        },
+        {
+          "title": "Thyroid nodules",
+          "page": 78
+        },
+        {
+          "title": "Parameter Painless thyroiditis Graves\u2019 disease",
+          "page": 79
+        },
+        {
+          "title": "Micronutrient deficiencies after gastric bypass surgery",
+          "page": 84
+        },
+        {
+          "title": "Male hypogonadism",
+          "page": 96
+        },
+        {
+          "title": "Classification of multiple endocrine",
+          "page": 98
+        },
+        {
+          "title": "Vitamin D deficiency in celiac sprue",
+          "page": 112
+        },
+        {
+          "title": "Type 2 diabetes with suboptimal",
+          "page": 117
+        },
+        {
+          "title": "Paget's disease",
+          "page": 118
+        },
+        {
+          "title": "Subclinical hypothyroidism",
+          "page": 129
+        },
+        {
+          "title": "Thyroid storm",
+          "page": 145
+        },
+        {
+          "title": "Prevention of steroid-induced osteoporosis",
+          "page": 146
+        },
+        {
+          "title": "Major drug interactions of levothyroxine",
+          "page": 147
+        },
+        {
+          "title": "Granulomatous disorders causing hypercalcemia",
+          "page": 149
+        },
+        {
+          "title": "Osteoporosis risk factors in men",
+          "page": 153
+        }
+      ]
+    },
+    {
+      "title": "Derm",
+      "entries": [
+        {
+          "title": "Nonhealing pressure ulcers",
+          "page": 6
+        },
+        {
+          "title": "Dermatomyositis",
+          "page": 14
+        },
+        {
+          "title": "Pressure ulcers",
+          "page": 17
+        },
+        {
+          "title": "SLE dermatitis",
+          "page": 62
+        }
+      ]
+    },
+    {
+      "title": "Tox",
+      "entries": [
+        {
+          "title": "Hypothermia",
+          "page": 83
+        },
+        {
+          "title": "Lithium toxicity",
+          "page": 122
+        }
+      ]
+    },
+    {
+      "title": "MSK",
+      "entries": [
+        {
+          "title": "Polymyalgia rheumatica",
+          "page": 9
+        },
+        {
+          "title": "Meniscus & knee ligament injuries",
+          "page": 28
+        },
+        {
+          "title": "Fibromyalgia",
+          "page": 30
+        },
+        {
+          "title": "Complex regional pain syndrome (CRPS)",
+          "page": 35
+        },
+        {
+          "title": "Diagnosis Drug-induced lupus | DNA-histone complex (95%)",
+          "page": 50
+        },
+        {
+          "title": "Lower back pain",
+          "page": 82
+        },
+        {
+          "title": "Ottawa ankle rules",
+          "page": 94
+        }
+      ]
+    },
+    {
+      "title": "OB/GYN",
+      "entries": [
+        {
+          "title": "Secondary amenorrhea",
+          "page": 45
+        },
+        {
+          "title": "Menopause",
+          "page": 116
+        }
+      ]
+    },
+    {
+      "title": "Other",
+      "entries": [
+        {
+          "title": "Cover",
+          "page": 1
+        },
+        {
+          "title": "Increased peak pressure",
+          "page": 10
+        },
+        {
+          "title": "Massive",
+          "page": 36
+        },
+        {
+          "title": "Typeof | Rinne test Weber test Possible causes",
+          "page": 76
+        },
+        {
+          "title": "Cause of ' 5",
+          "page": 80
+        },
+        {
+          "title": "ee GE ene EE ee, CEE ees",
+          "page": 81
+        },
+        {
+          "title": "Secondary causes of",
+          "page": 87
+        },
+        {
+          "title": "Screening criteria for latent autoimmune",
+          "page": 88
+        },
+        {
+          "title": "Clinical features",
+          "page": 99
+        },
+        {
+          "title": "Flow (L /sec)",
+          "page": 100
+        },
+        {
+          "title": "Flow (L /sec)",
+          "page": 101
+        },
+        {
+          "title": "Sensitivity of anti-neutrophil cytoplasmic",
+          "page": 111
+        },
+        {
+          "title": "CVID",
+          "page": 124
+        },
+        {
+          "title": "Reversible causes of transient",
+          "page": 134
+        },
+        {
+          "title": "Vinleteantiial 1.0%-2.0% Segre epee Spee",
+          "page": 163
+        }
+      ]
+    }
+  ]
+}
