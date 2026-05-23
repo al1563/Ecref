@@ -15,6 +15,8 @@ Author: Elaine Cheung
 | **Dot Phrases** | Searchable, copy-to-clipboard documentation templates |
 | **Clinical Reasoning** | Embedded Google Doc, gated by encrypted password (Web Crypto) |
 | **Patients** | Embedded Google Sheet for de-identified patient log, same gate |
+| **Handbook** | MGH Pocket Medicine TOC + inline page images |
+| **Reference** | Antibiotic guides, ConanLi, EBM, UW Learning Objectives, MKSAP (separately gated) |
 
 ---
 
@@ -31,6 +33,7 @@ If the site is deployed on Vercel with KV configured, edits take effect **instan
 2. **Set the editor password**
    - Same dashboard → **Settings** → **Environment Variables**.
    - Add `EDITOR_PASSWORD` with the password you want to use for editing.
+   - Add `MKSAP_PASSWORD` if you want to use the MKSAP section in the Reference tab (defaults to `ElaineWR`).
    - Apply to: Production, Preview, Development.
 
 3. **Redeploy** (Settings → Deployments → … → Redeploy) so the new env vars take effect.
@@ -271,6 +274,69 @@ The bundled `SECRETS` ship with `patientsSheetUrl: null`, so the Patients gate s
 
 ---
 
+## The Reference tab
+
+A nested table-of-contents tab that combines static antibiotic references with editable lists.
+
+### Sections
+
+| Section | Type | Editable? | Source |
+|---|---|---|---|
+| Antibiotics → Antibiotics guide | Static image | No | `docs/abx-guide-pages/page-1.jpg` (Northwestern guide) |
+| Antibiotics → BugDrugDx | Embedded iframe | No | <https://bugdrugdx.com/> |
+| Antibiotics → Abx Venn | Static image | No | `docs/abx_venn.png` |
+| Antibiotics → UCI Antibiogram | Editable single image | Yes (EDITOR_PASSWORD) | KV section `uci-antibiogram` |
+| Antibiotics → Antibiotics extras | Editable list (images / links) | Yes (EDITOR_PASSWORD) | KV section `abx-extras` |
+| ConanLi UMD | External link card | No | <https://conanliumd.com/en-usd> (X-Frame-Options blocks embedding) |
+| EBM articles | Editable list + daily pick | Yes (EDITOR_PASSWORD) | KV section `ebm` |
+| UW Learning Objectives | Editable list | Yes (EDITOR_PASSWORD) | KV section `uw` |
+| MKSAP Boards Basics | Editable list + daily pick | Yes (MKSAP_PASSWORD) | KV section `mksap` — separately gated |
+
+### Daily pick
+
+EBM and MKSAP each surface one item per day deterministically (hash of today's date → index into the list). Same item all day, rotates at local midnight. No backend state — purely client-side.
+
+### Editing list items
+
+- Open any editable section → click **Add** (or the edit button on an existing item).
+- The modal supports a title, optional URL, markdown body, optional image upload (goes to R2 if configured, else fails with a toast), and tags.
+- Saves go to `/api/list/<section>` (POST) or `/api/list/<section>/<id>` (PUT/DELETE).
+- All writes require an editor password (`EDITOR_PASSWORD` for ebm/uw/abx-extras/uci-antibiogram, `MKSAP_PASSWORD` for mksap).
+
+### MKSAP gate
+
+The MKSAP section is gated by a **separate password** (default: `ElaineWR`). It works in two layers:
+
+1. **Client-side gate** — decrypts a sentinel stored in `SECRETS.mksapSentinel` (`script.js`) to verify the password is right. Wrong password = decryption fails.
+2. **Server-side bearer auth** — every read or write to `/api/list/mksap` requires `Authorization: Bearer <MKSAP_PASSWORD>`. The server uses `process.env.MKSAP_PASSWORD` for the comparison.
+
+If `MKSAP_PASSWORD` is not set on the server, MKSAP API calls return 401. Set the env var in Vercel and redeploy.
+
+The MKSAP password lives in `sessionStorage` once unlocked (cleared when the browser tab closes, or when you click **Lock**).
+
+### Rotating the MKSAP password
+
+1. Run `tools/encrypt-urls.html` locally → use it to encrypt the literal string `MKSAP_UNLOCKED` with the new password (or generate a fresh sentinel via the helper).
+2. Replace `SECRETS.mksapSentinel` in `script.js` with the new ciphertext.
+3. Update `MKSAP_PASSWORD` env var in Vercel to the new password.
+4. Commit + redeploy.
+
+Both layers must use the same password — the client uses it to unlock the UI, and sends it as the bearer token; the server uses it as the expected password.
+
+### Adding new reference sections (developer)
+
+To add a new editable list section (e.g., "Procedure videos"):
+
+1. Add the section to the allowlists in `api/list/[section].js` and `api/list/[section]/[id].js`.
+2. Add an entry to `REFERENCE_TOC` in `script.js` (`type: 'list'` with `section: 'your-section-name'`).
+3. Optionally add `dailyPick: true` to surface a daily item.
+
+To add a new static section (image, embed, etc.):
+
+1. Add a `REFERENCE_TOC` entry with `type` of `poster`, `embed`, or `external`.
+
+---
+
 ## Local preview
 
 ```sh
@@ -296,4 +362,4 @@ python3 -m http.server 8000
 ```
 
 **Last Updated:** May 2026
-**Version:** 2026.3
+**Version:** 2026.4

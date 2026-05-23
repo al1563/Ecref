@@ -15,8 +15,14 @@ const SECRETS = {
     "ct": "RnmvlZw+bQ3pQDjTbwBqX08Eb2TaFIg49LljU/OJJmNqu0aJ5q5CpLr7uRSSlkTEBwnAU/vVN3jNYcATmfAGw5OMjcm+jo7TiHc8V31eCCWOduC8hUGGQfLdjHMQQeSFRwGIlckJo43SgQTyxfiOjf/fCNw=",
     "iv": "1Yr9FGeE1TzNGBnC",
     "salt": "g7GMdxWiS0LyVellK2qDPQ=="
+  },
+  "mksapSentinel": {
+    "ct": "O/9y43+jn/28v8M255IQI/Mj9kvyi3W2xQ6+6JfD",
+    "iv": "smy8H6a8eFiell/j",
+    "salt": "/xfXFIfaF/cpC1f5l/3QXA=="
   }
 };
+const MKSAP_SENTINEL_PLAINTEXT = 'MKSAP_UNLOCKED';
 const PBKDF2_ITER = 200000;
 
 let dotphrasesData = [];
@@ -103,6 +109,9 @@ $(document).ready(function () {
 
     // Editor (add/edit/delete entries via GitHub API)
     initEditor();
+
+    // Reference tab (Antibiotics + ConanLi + EBM + UW + MKSAP)
+    initReference();
 });
 
 // =========================================================================
@@ -1789,4 +1798,767 @@ function renderHandbook() {
         </div>
     `).join('');
     document.getElementById('handbookContent').innerHTML = html;
+}
+
+// =========================================================================
+// Reference tab — Antibiotics + ConanLi + EBM + UW + MKSAP
+// =========================================================================
+
+const REFERENCE_TOC = [
+    { type: 'group', id: 'g-antibiotics', title: 'Antibiotics', icon: 'fa-pills', items: [
+        { id: 'abx-guide',       title: 'Antibiotics guide',     icon: 'fa-file-image', type: 'poster',
+          src: 'docs/abx-guide-pages/page-1.jpg',
+          caption: 'Northwestern Introductory Guide to Antibiotics',
+          pdf: 'docs/nu-introductory-guide-to-antibiotics.pdf' },
+        { id: 'bugdrugdx',       title: 'BugDrugDx',             icon: 'fa-bug',        type: 'embed',
+          url: 'https://bugdrugdx.com/',
+          description: 'Cross-reference antibiotics, bugs, and infection types.' },
+        { id: 'abx-venn',        title: 'Abx Venn diagram',      icon: 'fa-circle-dot', type: 'poster',
+          src: 'docs/abx_venn.png',
+          caption: 'Antibiotic spectrum overlap.' },
+        { id: 'uci-antibiogram', title: 'UCI Antibiogram',       icon: 'fa-microscope', type: 'antibiogram',
+          section: 'uci-antibiogram',
+          caption: 'Latest UCI Medical Center antibiogram. Upload a new image/PDF to replace.' },
+        { id: 'abx-extras',      title: 'Antibiotics — extras',  icon: 'fa-folder-plus',type: 'list',
+          section: 'abx-extras',
+          subtitle: 'Reference images, dosing tables, links you want to keep handy.' },
+    ]},
+    { type: 'item', id: 'conanli', title: 'ConanLi UMD', icon: 'fa-user-md', type2: 'external',
+      url: 'https://conanliumd.com/en-usd',
+      reason: 'site blocks embedding (X-Frame-Options)' },
+    { type: 'item', id: 'ebm', title: 'EBM articles', icon: 'fa-flask', type2: 'list',
+      section: 'ebm', dailyPick: true,
+      subtitle: 'Landmark trials and evidence-based reference articles. One pick surfaces daily.' },
+    { type: 'item', id: 'uw', title: 'UW Learning Objectives', icon: 'fa-graduation-cap', type2: 'list',
+      section: 'uw',
+      subtitle: 'UWorld learning objectives — track what you\'ve learned.' },
+    { type: 'item', id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type2: 'mksap',
+      section: 'mksap', dailyPick: true,
+      subtitle: 'Password-gated. Boards Basics notes from your MKSAP account.' },
+];
+
+const REFERENCE_STATE = {
+    activeId: null,
+    query: '',
+    lists: {},               // section name → array of items (cached)
+    mksapUnlocked: false,
+    mksapPassword: null,
+    refModal: null,
+    mksapUnlockModal: null,
+    refItem: null,           // current item being edited in refItemModal
+    refItemSection: null,    // which section that item belongs to
+    refItemImage: null,      // staged image URL (after R2 upload)
+    refItemTags: [],
+};
+
+const REFERENCE_STORAGE = {
+    mksapPassword: 'ecref.mksap.pw',  // sessionStorage key
+};
+
+function refToc() { return document.getElementById('referenceToc'); }
+function refViewer() { return document.getElementById('referenceViewer'); }
+function refPlaceholder() { return document.getElementById('referenceViewerPlaceholder'); }
+function refTitle() { return document.getElementById('referenceViewerTitle'); }
+function refActions() { return document.getElementById('referenceViewerActions'); }
+
+function initReference() {
+    // Restore MKSAP password from sessionStorage if previously unlocked this tab
+    try {
+        const stored = sessionStorage.getItem(REFERENCE_STORAGE.mksapPassword);
+        if (stored) {
+            REFERENCE_STATE.mksapPassword = stored;
+            REFERENCE_STATE.mksapUnlocked = true;
+        }
+    } catch (e) { /* sessionStorage disabled */ }
+
+    REFERENCE_STATE.refModal = new bootstrap.Modal(document.getElementById('refItemModal'));
+    REFERENCE_STATE.mksapUnlockModal = new bootstrap.Modal(document.getElementById('mksapUnlockModal'));
+
+    renderReferenceToc();
+
+    // Search
+    document.getElementById('referenceSearch')?.addEventListener('input', e => {
+        REFERENCE_STATE.query = e.target.value;
+        renderReferenceToc();
+    });
+
+    // TOC delegated clicks
+    refToc().addEventListener('click', e => {
+        const groupTitle = e.target.closest('.reference-group-title');
+        if (groupTitle) {
+            groupTitle.parentElement.classList.toggle('collapsed');
+            return;
+        }
+        const itemEl = e.target.closest('[data-ref-id]');
+        if (itemEl) {
+            e.preventDefault();
+            loadReferenceItem(itemEl.dataset.refId);
+        }
+    });
+
+    // refItem modal wiring
+    wireRefItemModal();
+    // MKSAP unlock modal wiring
+    wireMksapUnlock();
+}
+
+function refAllItems() {
+    const out = [];
+    for (const node of REFERENCE_TOC) {
+        if (Array.isArray(node.items)) for (const ch of node.items) out.push(ch);
+        else out.push(node);
+    }
+    return out;
+}
+
+function refFindById(id) {
+    return refAllItems().find(i => i.id === id) || null;
+}
+
+function renderReferenceToc() {
+    const q = REFERENCE_STATE.query.trim().toLowerCase();
+    const matches = item => !q || (item.title || '').toLowerCase().includes(q);
+    const html = REFERENCE_TOC.map(node => {
+        if (Array.isArray(node.items)) {
+            const childs = node.items.filter(matches);
+            if (!childs.length) return '';
+            return `<div class="reference-group">
+                <div class="reference-group-title">
+                    <i class="fas fa-chevron-down reference-chevron"></i>
+                    <i class="fas ${escapeHtml(node.icon || 'fa-folder')} me-1"></i>
+                    <span>${escapeHtml(node.title)}</span>
+                </div>
+                <ul class="reference-group-items">
+                    ${childs.map(c => refTocItemHtml(c)).join('')}
+                </ul>
+            </div>`;
+        }
+        if (!matches(node)) return '';
+        return `<ul class="reference-group-items" style="margin-left:0;">
+            ${refTocItemHtml(node)}
+        </ul>`;
+    }).join('');
+    refToc().innerHTML = html;
+    // Restore active highlight
+    if (REFERENCE_STATE.activeId) {
+        const el = refToc().querySelector(`[data-ref-id="${CSS.escape(REFERENCE_STATE.activeId)}"]`);
+        if (el) el.classList.add('active');
+    }
+}
+
+function refTocItemHtml(item) {
+    return `<li>
+        <a href="#" class="reference-item" data-ref-id="${escapeHtml(item.id)}">
+            <i class="fas ${escapeHtml(item.icon || 'fa-circle')}"></i>
+            <span>${escapeHtml(item.title)}</span>
+        </a>
+    </li>`;
+}
+
+function loadReferenceItem(id) {
+    const node = refFindById(id);
+    if (!node) return;
+    REFERENCE_STATE.activeId = id;
+    document.querySelectorAll('.reference-item.active').forEach(el => el.classList.remove('active'));
+    const el = refToc().querySelector(`[data-ref-id="${CSS.escape(id)}"]`);
+    if (el) el.classList.add('active');
+
+    refTitle().textContent = node.title;
+    refTitle().classList.remove('text-muted');
+    refActions().innerHTML = '';
+    refPlaceholder().style.display = 'none';
+
+    const viewer = refViewer();
+    viewer.style.display = 'block';
+    viewer.classList.remove('fill');
+    viewer.scrollTop = 0;
+
+    switch (node.type) {
+        case 'poster':      return renderPoster(node);
+        case 'embed':       return renderEmbed(node);
+        case 'antibiogram': return renderAntibiogram(node);
+        case 'external':    return renderExternal(node);
+        case 'list':        return renderListSection(node);
+        case 'mksap':       return renderMksapSection(node);
+        default:
+            viewer.innerHTML = `<div class="alert alert-warning">Unknown reference type: ${escapeHtml(node.type || '')}</div>`;
+    }
+}
+
+// ----- Static poster (single image) -----
+function renderPoster(node) {
+    const viewer = refViewer();
+    viewer.innerHTML = `
+        <div class="reference-poster">
+            <img src="${escapeHtml(node.src)}" alt="${escapeHtml(node.title)}" loading="eager">
+            ${node.caption ? `<figcaption>${escapeHtml(node.caption)}</figcaption>` : ''}
+        </div>`;
+    viewer.querySelector('img').addEventListener('click', e => openImageModal(e.target.src));
+    if (node.pdf) {
+        refActions().innerHTML = `<a href="${escapeHtml(node.pdf)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-file-pdf me-1"></i>PDF
+        </a>`;
+    }
+}
+
+// ----- Embedded iframe with graceful fallback if blocked -----
+function renderEmbed(node) {
+    const viewer = refViewer();
+    viewer.classList.add('fill');
+    viewer.innerHTML = `
+        <iframe src="${escapeHtml(node.url)}" class="reference-embed-frame" allowfullscreen
+                referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    refActions().innerHTML = `<a href="${escapeHtml(node.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-external-link-alt me-1"></i>Open in new tab
+    </a>`;
+}
+
+// ----- External-only (iframe blocked by remote site) -----
+function renderExternal(node) {
+    const viewer = refViewer();
+    viewer.innerHTML = `
+        <div class="reference-embed-blocked">
+            <i class="fas fa-external-link-alt"></i>
+            <h5>${escapeHtml(node.title)}</h5>
+            <p class="text-muted small">This site doesn't allow embedding (${escapeHtml(node.reason || 'CSP / X-Frame-Options')}).</p>
+            <a href="${escapeHtml(node.url)}" target="_blank" rel="noopener" class="btn btn-primary">
+                <i class="fas fa-external-link-alt me-1"></i>Open ${escapeHtml(node.title)}
+            </a>
+        </div>`;
+    refActions().innerHTML = `<a href="${escapeHtml(node.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-external-link-alt me-1"></i>Open in new tab
+    </a>`;
+}
+
+// ----- UCI Antibiogram (single editable image slot) -----
+async function renderAntibiogram(node) {
+    const viewer = refViewer();
+    viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading...</div>`;
+    const items = await fetchListSection(node.section);
+    REFERENCE_STATE.lists[node.section] = items;
+
+    if (!items.length) {
+        viewer.innerHTML = `
+            <div class="reference-empty-slot">
+                <i class="fas fa-microscope"></i>
+                <h5>No antibiogram uploaded yet</h5>
+                <p class="text-muted">Click below to upload the latest UCI antibiogram. JPG, PNG, or PDF.</p>
+                ${editorReadyHtml() ? `<button class="btn btn-primary" data-ref-add="${escapeHtml(node.section)}">
+                    <i class="fas fa-upload me-1"></i>Upload antibiogram
+                </button>` : `<p class="text-muted small">${unconfiguredEditorMsg()}</p>`}
+            </div>`;
+    } else {
+        // Show most-recent first; render the latest big, list older below
+        const sorted = items.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        const latest = sorted[0];
+        const older  = sorted.slice(1);
+        viewer.innerHTML = `
+            <div class="reference-poster">
+                ${latest.image ? `<img src="${escapeHtml(latest.image)}" alt="${escapeHtml(latest.title)}">`
+                              : (latest.url ? `<p><a href="${escapeHtml(latest.url)}" target="_blank" rel="noopener">${escapeHtml(latest.title)}</a></p>` : '')}
+                <figcaption>${escapeHtml(latest.title)}${latest.createdAt ? ' — uploaded ' + escapeHtml(relativeTime(latest.createdAt)) : ''}</figcaption>
+                ${latest.body ? `<div class="reference-list-item-body mt-3 text-start">${renderRichText(latest.body)}</div>` : ''}
+            </div>
+            ${editorReadyHtml() ? `<div class="text-center mt-3">
+                <button class="btn btn-sm btn-outline-primary" data-ref-edit="${escapeHtml(node.section)}/${escapeHtml(latest.id)}">
+                    <i class="fas fa-edit me-1"></i>Edit
+                </button>
+                <button class="btn btn-sm btn-primary" data-ref-add="${escapeHtml(node.section)}">
+                    <i class="fas fa-upload me-1"></i>Upload new version
+                </button>
+            </div>` : ''}
+            ${older.length ? `<hr><h6 class="text-muted small mb-2">Older versions</h6>
+                <div class="reference-list">${older.map(i => renderListItemHtml(i, node.section)).join('')}</div>` : ''}
+        `;
+        viewer.querySelectorAll('img').forEach(im => im.addEventListener('click', e => openImageModal(e.target.src)));
+    }
+    refActions().innerHTML = node.caption ? `<span class="text-muted small">${escapeHtml(node.caption)}</span>` : '';
+    wireListActions(viewer, node.section);
+}
+
+// ----- Generic editable list (EBM, UW, abx-extras) -----
+async function renderListSection(node) {
+    const viewer = refViewer();
+    viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading ${escapeHtml(node.title)}...</div>`;
+
+    let items;
+    try {
+        items = await fetchListSection(node.section);
+    } catch (e) {
+        viewer.innerHTML = `<div class="alert alert-warning">Couldn't load ${escapeHtml(node.title)}: ${escapeHtml(e.message)}</div>`;
+        return;
+    }
+    REFERENCE_STATE.lists[node.section] = items;
+
+    // Sort newest first
+    const sorted = items.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    const pickHtml = node.dailyPick && items.length
+        ? renderDailyPickHtml(items, node.title)
+        : '';
+
+    const listHtml = sorted.length
+        ? sorted.map(i => renderListItemHtml(i, node.section)).join('')
+        : `<div class="reference-list-empty">
+            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+            <p class="mb-0">No items yet.${editorReadyHtml() ? ' Click <strong>Add</strong> above to create one.' : ''}</p>
+        </div>`;
+
+    viewer.innerHTML = `
+        <div class="reference-list-header">
+            <div>
+                <h5>${escapeHtml(node.title)}</h5>
+                ${node.subtitle ? `<small class="text-muted">${escapeHtml(node.subtitle)}</small>` : ''}
+            </div>
+            <div>
+                <span class="text-muted small me-2">${items.length} item${items.length === 1 ? '' : 's'}</span>
+                ${editorReadyHtml() ? `<button class="btn btn-sm btn-primary" data-ref-add="${escapeHtml(node.section)}">
+                    <i class="fas fa-plus me-1"></i>Add
+                </button>` : ''}
+            </div>
+        </div>
+        ${pickHtml}
+        <div class="reference-list">${listHtml}</div>
+    `;
+
+    if (!editorReadyHtml()) {
+        refActions().innerHTML = `<span class="text-muted small">${unconfiguredEditorMsg()}</span>`;
+    } else {
+        refActions().innerHTML = '';
+    }
+
+    viewer.querySelectorAll('img').forEach(im => im.addEventListener('click', e => openImageModal(e.target.src)));
+    wireListActions(viewer, node.section);
+}
+
+// ----- MKSAP section (gated by separate password) -----
+async function renderMksapSection(node) {
+    const viewer = refViewer();
+    if (!REFERENCE_STATE.mksapUnlocked) {
+        viewer.innerHTML = `
+            <div class="reference-mksap-gate">
+                <i class="fas fa-lock"></i>
+                <h5>MKSAP Boards Basics</h5>
+                <p class="text-muted">${escapeHtml(node.subtitle || 'Gated by a separate password.')}</p>
+                <button class="btn btn-primary" id="mksapShowUnlock">
+                    <i class="fas fa-unlock me-1"></i>Unlock
+                </button>
+            </div>`;
+        document.getElementById('mksapShowUnlock').addEventListener('click', () => {
+            document.getElementById('mksapPasswordInput').value = '';
+            document.getElementById('mksapUnlockError').style.display = 'none';
+            REFERENCE_STATE.mksapUnlockModal.show();
+        });
+        refActions().innerHTML = '';
+        return;
+    }
+
+    // Unlocked: same rendering as a regular list, but auth-gated fetch
+    viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading MKSAP...</div>`;
+    let items;
+    try {
+        items = await fetchListSection(node.section, REFERENCE_STATE.mksapPassword);
+    } catch (e) {
+        if (String(e.message).includes('401')) {
+            // Password no longer valid (rotated server-side) — relock
+            REFERENCE_STATE.mksapUnlocked = false;
+            REFERENCE_STATE.mksapPassword = null;
+            try { sessionStorage.removeItem(REFERENCE_STORAGE.mksapPassword); } catch (e) {}
+            renderMksapSection(node);
+            toast('MKSAP password no longer valid — please unlock again.', 'error');
+            return;
+        }
+        viewer.innerHTML = `<div class="alert alert-warning">Couldn't load MKSAP: ${escapeHtml(e.message)}</div>`;
+        return;
+    }
+    REFERENCE_STATE.lists[node.section] = items;
+
+    const sorted = items.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const pickHtml = node.dailyPick && items.length
+        ? renderDailyPickHtml(items, node.title)
+        : '';
+    const listHtml = sorted.length
+        ? sorted.map(i => renderListItemHtml(i, node.section)).join('')
+        : `<div class="reference-list-empty">
+            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+            <p class="mb-0">No MKSAP items yet. Click <strong>Add</strong> to create one.</p>
+        </div>`;
+
+    viewer.innerHTML = `
+        <div class="reference-list-header">
+            <div>
+                <h5><i class="fas fa-unlock me-1 text-success"></i>${escapeHtml(node.title)}</h5>
+                ${node.subtitle ? `<small class="text-muted">${escapeHtml(node.subtitle)}</small>` : ''}
+            </div>
+            <div>
+                <span class="text-muted small me-2">${items.length} item${items.length === 1 ? '' : 's'}</span>
+                <button class="btn btn-sm btn-primary" data-ref-add="${escapeHtml(node.section)}">
+                    <i class="fas fa-plus me-1"></i>Add
+                </button>
+            </div>
+        </div>
+        ${pickHtml}
+        <div class="reference-list">${listHtml}</div>
+    `;
+    refActions().innerHTML = `<button class="btn btn-sm btn-outline-secondary" id="mksapLockBtn">
+        <i class="fas fa-lock me-1"></i>Lock
+    </button>`;
+    document.getElementById('mksapLockBtn').addEventListener('click', () => {
+        REFERENCE_STATE.mksapUnlocked = false;
+        REFERENCE_STATE.mksapPassword = null;
+        try { sessionStorage.removeItem(REFERENCE_STORAGE.mksapPassword); } catch (e) {}
+        renderMksapSection(node);
+        toast('MKSAP locked.', 'info');
+    });
+
+    viewer.querySelectorAll('img').forEach(im => im.addEventListener('click', e => openImageModal(e.target.src)));
+    wireListActions(viewer, node.section);
+}
+
+// ----- Render a single list-item card -----
+function renderListItemHtml(item, section) {
+    const titleHtml = item.url
+        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title || '(no title)')}</a>`
+        : escapeHtml(item.title || '(no title)');
+    const imgHtml = item.image ? `<img src="${escapeHtml(item.image)}" alt="">` : '';
+    const tagsHtml = (item.tags || []).length
+        ? (item.tags || []).map(t => `<span class="badge bg-light text-dark">${escapeHtml(t)}</span>`).join(' ')
+        : '';
+    const dateHtml = item.updatedAt || item.createdAt
+        ? `<span><i class="far fa-clock me-1"></i>${escapeHtml(relativeTime(item.updatedAt || item.createdAt))}</span>`
+        : '';
+    return `<div class="reference-list-item" data-ref-item-id="${escapeHtml(item.id)}">
+        <div class="reference-list-item-head">
+            <div class="reference-list-item-title">${titleHtml}</div>
+            ${editorReadyHtml() || section === 'mksap' ? `<div class="reference-list-item-actions">
+                <button class="btn btn-outline-secondary" data-ref-edit="${escapeHtml(section)}/${escapeHtml(item.id)}" title="Edit"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-outline-danger" data-ref-delete="${escapeHtml(section)}/${escapeHtml(item.id)}" title="Delete"><i class="fas fa-trash"></i></button>
+            </div>` : ''}
+        </div>
+        ${item.body ? `<div class="reference-list-item-body">${renderRichText(item.body)}</div>` : ''}
+        ${imgHtml}
+        <div class="reference-list-item-meta">${tagsHtml}${dateHtml}</div>
+    </div>`;
+}
+
+function renderDailyPickHtml(items, sectionTitle) {
+    const pick = pickOfTheDay(items);
+    if (!pick) return '';
+    const titleHtml = pick.url
+        ? `<a href="${escapeHtml(pick.url)}" target="_blank" rel="noopener">${escapeHtml(pick.title || '(no title)')}</a>`
+        : escapeHtml(pick.title || '(no title)');
+    const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    return `<div class="reference-pick">
+        <div class="reference-pick-label">
+            <i class="fas fa-star"></i>Today's ${escapeHtml(sectionTitle)} pick · ${escapeHtml(today)}
+        </div>
+        <div class="reference-pick-title">${titleHtml}</div>
+        ${pick.body ? `<div class="reference-pick-body">${renderRichText(pick.body)}</div>` : ''}
+        ${pick.image ? `<div class="reference-pick-body"><img src="${escapeHtml(pick.image)}" alt=""></div>` : ''}
+    </div>`;
+}
+
+// Deterministic daily pick — same item all day, rotates at local midnight
+function pickOfTheDay(items) {
+    if (!items.length) return null;
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    let hash = 7;
+    for (let i = 0; i < today.length; i++) hash = ((hash * 31) + today.charCodeAt(i)) >>> 0;
+    return items[hash % items.length];
+}
+
+// ----- Editor readiness gate (mirror logic from KB) -----
+function editorReadyHtml() {
+    // Returns true if the API editor is configured & has a password this session
+    return EDITOR_STATE.mode === 'api' && EDITOR_STATE.apiPassword;
+}
+function unconfiguredEditorMsg() {
+    if (EDITOR_STATE.mode !== 'api') return 'Editing requires the Vercel/KV deployment.';
+    return 'Editor not unlocked. Open the Knowledge Base tab → set up editor.';
+}
+
+// ----- Fetch a list section -----
+async function fetchListSection(section, bearer = null) {
+    const headers = { 'Cache-Control': 'no-cache' };
+    if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
+    const r = await fetch(`/api/list/${encodeURIComponent(section)}`, { cache: 'no-store', headers });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    return j.items || [];
+}
+
+// ----- Wire delegated clicks on list items (add/edit/delete) -----
+function wireListActions(viewer, section) {
+    viewer.querySelectorAll('[data-ref-add]').forEach(el => {
+        el.addEventListener('click', () => openRefItemModal(el.dataset.refAdd, null));
+    });
+    viewer.querySelectorAll('[data-ref-edit]').forEach(el => {
+        const [sec, id] = el.dataset.refEdit.split('/');
+        el.addEventListener('click', () => {
+            const item = (REFERENCE_STATE.lists[sec] || []).find(i => i.id === id);
+            if (item) openRefItemModal(sec, item);
+        });
+    });
+    viewer.querySelectorAll('[data-ref-delete]').forEach(el => {
+        const [sec, id] = el.dataset.refDelete.split('/');
+        el.addEventListener('click', () => deleteRefItem(sec, id));
+    });
+}
+
+// ----- Refresh active section after a mutation -----
+function refreshActiveSection() {
+    if (REFERENCE_STATE.activeId) loadReferenceItem(REFERENCE_STATE.activeId);
+}
+
+// =========================================================================
+// Reference item editor modal
+// =========================================================================
+
+function wireRefItemModal() {
+    const tagInput = document.getElementById('refItemTagInput');
+    tagInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const v = tagInput.value.trim();
+            if (v && !REFERENCE_STATE.refItemTags.includes(v)) {
+                REFERENCE_STATE.refItemTags.push(v);
+                renderRefItemTags();
+            }
+            tagInput.value = '';
+        }
+    });
+    document.getElementById('refItemTagsBox').addEventListener('click', e => {
+        const rm = e.target.closest('[data-rm-tag]');
+        if (rm) {
+            REFERENCE_STATE.refItemTags = REFERENCE_STATE.refItemTags.filter(t => t !== rm.dataset.rmTag);
+            renderRefItemTags();
+        }
+    });
+
+    // Image picker
+    document.getElementById('refItemImagePickBtn').addEventListener('click',
+        () => document.getElementById('refItemImageFile').click());
+    document.getElementById('refItemImageFile').addEventListener('change', e => {
+        if (e.target.files[0]) uploadRefItemImage(e.target.files[0]);
+    });
+    const drop = document.getElementById('refItemImageDrop');
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+    drop.addEventListener('drop', e => {
+        e.preventDefault();
+        drop.classList.remove('drag');
+        if (e.dataTransfer.files[0]) uploadRefItemImage(e.dataTransfer.files[0]);
+    });
+
+    document.getElementById('refItemSaveBtn').addEventListener('click', saveRefItem);
+    document.getElementById('refItemDeleteBtn').addEventListener('click', () => {
+        if (REFERENCE_STATE.refItem && confirm(`Delete "${REFERENCE_STATE.refItem.title}"?`)) {
+            deleteRefItem(REFERENCE_STATE.refItemSection, REFERENCE_STATE.refItem.id);
+            REFERENCE_STATE.refModal.hide();
+        }
+    });
+}
+
+function renderRefItemTags() {
+    const box = document.getElementById('refItemTagsBox');
+    box.innerHTML = REFERENCE_STATE.refItemTags.map(t =>
+        `<span class="editor-tag-chip">${escapeHtml(t)} <button type="button" data-rm-tag="${escapeHtml(t)}" aria-label="Remove tag">&times;</button></span>`
+    ).join('');
+}
+
+function renderRefItemImagePreview() {
+    const preview = document.getElementById('refItemImagePreview');
+    if (REFERENCE_STATE.refItemImage) {
+        preview.innerHTML = `<img src="${escapeHtml(REFERENCE_STATE.refItemImage)}" alt="">
+            <button type="button" class="btn btn-sm btn-outline-danger" id="refItemImageRemove">Remove</button>`;
+        document.getElementById('refItemImageRemove').addEventListener('click', () => {
+            REFERENCE_STATE.refItemImage = null;
+            renderRefItemImagePreview();
+        });
+    } else {
+        preview.innerHTML = '';
+    }
+}
+
+function openRefItemModal(section, item) {
+    REFERENCE_STATE.refItemSection = section;
+    REFERENCE_STATE.refItem = item;
+    REFERENCE_STATE.refItemImage = item?.image || null;
+    REFERENCE_STATE.refItemTags = (item?.tags || []).slice();
+
+    document.getElementById('refItemModalLabel').textContent =
+        item ? `Edit — ${item.title || section}` : `Add to ${sectionPrettyName(section)}`;
+    document.getElementById('refItemTitle').value = item?.title || '';
+    document.getElementById('refItemUrl').value = item?.url || '';
+    document.getElementById('refItemBody').value = item?.body || '';
+    document.getElementById('refItemDeleteBtn').style.display = item ? 'inline-block' : 'none';
+
+    // Antibiogram + abx-extras + UW often have images; EBM mostly URLs. Show image either way.
+    document.getElementById('refItemImageRow').style.display = '';
+    document.getElementById('refItemUrlRow').style.display = '';
+
+    renderRefItemTags();
+    renderRefItemImagePreview();
+    REFERENCE_STATE.refModal.show();
+}
+
+function sectionPrettyName(s) {
+    return { ebm: 'EBM articles', uw: 'UW Learning Objectives', 'abx-extras': 'Antibiotics extras',
+             'uci-antibiogram': 'UCI Antibiogram', mksap: 'MKSAP Boards Basics' }[s] || s;
+}
+
+async function uploadRefItemImage(file) {
+    if (!file.type.startsWith('image/')) {
+        toast('Only image files are supported here.', 'error');
+        return;
+    }
+    if (!editorReadyHtml() && REFERENCE_STATE.refItemSection !== 'mksap') {
+        toast('Editor not unlocked.', 'error');
+        return;
+    }
+    const password = REFERENCE_STATE.refItemSection === 'mksap'
+        ? REFERENCE_STATE.mksapPassword
+        : EDITOR_STATE.apiPassword;
+    const placeholderToast = toast('Uploading image...', 'info', { duration: 0 });
+    try {
+        const b64 = await fileToB64(file);
+        const r = await fetch('/api/upload-image', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, contentB64: b64, contentType: file.type }),
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        const { url } = await r.json();
+        REFERENCE_STATE.refItemImage = url;
+        renderRefItemImagePreview();
+        toast('Image uploaded.', 'success');
+    } catch (e) {
+        toast(`Upload failed: ${e.message}`, 'error', { duration: 5000 });
+    } finally {
+        dismissToast(placeholderToast);
+    }
+}
+
+async function saveRefItem() {
+    const section = REFERENCE_STATE.refItemSection;
+    const existing = REFERENCE_STATE.refItem;
+    const title = document.getElementById('refItemTitle').value.trim();
+    if (!title) { toast('Title is required.', 'error'); return; }
+
+    const password = section === 'mksap' ? REFERENCE_STATE.mksapPassword : EDITOR_STATE.apiPassword;
+    if (!password) { toast('Editor not unlocked.', 'error'); return; }
+
+    const now = new Date().toISOString();
+    const id = existing?.id || (slugify(title) + '-' + Date.now().toString(36));
+    const patch = {
+        id,
+        title,
+        url: document.getElementById('refItemUrl').value.trim() || null,
+        body: document.getElementById('refItemBody').value || '',
+        image: REFERENCE_STATE.refItemImage || null,
+        tags: REFERENCE_STATE.refItemTags.slice(),
+        updatedAt: now,
+        createdAt: existing?.createdAt || now,
+    };
+
+    const btn = document.getElementById('refItemSaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+
+    try {
+        let r;
+        if (existing) {
+            r = await fetch(`/api/list/${encodeURIComponent(section)}/${encodeURIComponent(id)}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+        } else {
+            r = await fetch(`/api/list/${encodeURIComponent(section)}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            });
+        }
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        toast(existing ? 'Updated.' : 'Added.', 'success');
+        REFERENCE_STATE.refModal.hide();
+        refreshActiveSection();
+    } catch (e) {
+        toast(`Save failed: ${e.message}`, 'error', { duration: 5000 });
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>Save';
+    }
+}
+
+async function deleteRefItem(section, id) {
+    const item = (REFERENCE_STATE.lists[section] || []).find(i => i.id === id);
+    if (!item) return;
+    if (!confirm(`Delete "${item.title}"?`)) return;
+    const password = section === 'mksap' ? REFERENCE_STATE.mksapPassword : EDITOR_STATE.apiPassword;
+    if (!password) { toast('Editor not unlocked.', 'error'); return; }
+    try {
+        const r = await fetch(`/api/list/${encodeURIComponent(section)}/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${password}` },
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        toast('Deleted.', 'success');
+        refreshActiveSection();
+    } catch (e) {
+        toast(`Delete failed: ${e.message}`, 'error', { duration: 5000 });
+    }
+}
+
+function slugify(s) {
+    return (s || 'item').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 50);
+}
+
+// =========================================================================
+// MKSAP unlock modal
+// =========================================================================
+
+function wireMksapUnlock() {
+    const submit = document.getElementById('mksapUnlockSubmit');
+    const input = document.getElementById('mksapPasswordInput');
+    const err = document.getElementById('mksapUnlockError');
+
+    const attempt = async () => {
+        err.style.display = 'none';
+        const pw = input.value;
+        if (!pw) { err.textContent = 'Enter a password.'; err.style.display = 'block'; return; }
+        try {
+            if (!SECRETS.mksapSentinel) throw new Error('MKSAP not configured.');
+            const plain = await decryptSecret(pw, SECRETS.mksapSentinel);
+            if (plain !== MKSAP_SENTINEL_PLAINTEXT) throw new Error('Wrong password.');
+            REFERENCE_STATE.mksapPassword = pw;
+            REFERENCE_STATE.mksapUnlocked = true;
+            try { sessionStorage.setItem(REFERENCE_STORAGE.mksapPassword, pw); } catch (e) {}
+            REFERENCE_STATE.mksapUnlockModal.hide();
+            toast('MKSAP unlocked.', 'success');
+            // Re-render if MKSAP is the active section
+            const mksapNode = refFindById('mksap');
+            if (mksapNode && REFERENCE_STATE.activeId === 'mksap') renderMksapSection(mksapNode);
+        } catch (e) {
+            err.textContent = e.message === 'MKSAP not configured.'
+                ? 'MKSAP not configured. Run tools/encrypt-urls.html to generate a sentinel.'
+                : 'Wrong password.';
+            err.style.display = 'block';
+        }
+    };
+    submit.addEventListener('click', attempt);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
 }

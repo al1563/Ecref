@@ -29,6 +29,7 @@ export default async function handler(req, res) {
         },
         auth: {
             EDITOR_PASSWORD: present('EDITOR_PASSWORD'),
+            MKSAP_PASSWORD: present('MKSAP_PASSWORD'),
         },
     });
 }

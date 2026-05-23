@@ -18,7 +18,7 @@
                 <small class="opacity-75">UCI Medical Center - Clinical Guidelines & Database</small>
             </div>
             <div>
-                <span class="badge bg-light text-dark">v2026.3</span>
+                <span class="badge bg-light text-dark">v2026.4</span>
             </div>
         </div>
     </div>
@@ -35,6 +35,7 @@
             <button class="tab-button" data-section="protected">Clinical Reasoning</button>
             <button class="tab-button" data-section="patients">Patients</button>
             <button class="tab-button" data-section="handbook">Handbook</button>
+            <button class="tab-button" data-section="reference">Reference</button>
         </div>
     </div>
 
@@ -666,6 +667,99 @@
                     <div class="embed-responsive">
                         <iframe id="patients-frame" src="" frameborder="0" allowfullscreen></iframe>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reference Section (Antibiotics + ConanLi + EBM + UW + MKSAP) -->
+    <div id="reference-section" class="data-section">
+        <div class="reference-layout">
+            <aside class="reference-toc-pane">
+                <div class="reference-toc-header">
+                    <h6 class="mb-2"><i class="fas fa-folder-tree me-2"></i>Reference</h6>
+                    <small class="text-muted d-block mb-2">Antibiotic guides, daily learning, UW objectives</small>
+                    <input type="search" id="referenceSearch" class="form-control form-control-sm" placeholder="Search reference items...">
+                </div>
+                <div id="referenceToc" class="reference-toc-content"></div>
+            </aside>
+            <main class="reference-viewer-pane">
+                <div class="reference-viewer-header">
+                    <span id="referenceViewerTitle" class="reference-viewer-title text-muted">Select a section to view</span>
+                    <div class="reference-viewer-actions" id="referenceViewerActions"></div>
+                </div>
+                <div id="referenceViewer" class="reference-viewer-body"></div>
+                <div id="referenceViewerPlaceholder" class="reference-viewer-placeholder">
+                    <i class="fas fa-book-open"></i>
+                    <p>Pick a section in the table of contents to load it here.</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Reference item editor (used by EBM / UW / Abx extras / MKSAP) -->
+    <div class="modal fade" id="refItemModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="refItemModalLabel">Add item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">Title <span class="text-danger">*</span></label>
+                            <input type="text" id="refItemTitle" class="form-control" placeholder="e.g. Sepsis 3 criteria">
+                        </div>
+                        <div class="col-12" id="refItemUrlRow">
+                            <label class="form-label">URL <span class="text-muted small">(optional)</span></label>
+                            <input type="url" id="refItemUrl" class="form-control" placeholder="https://...">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" id="refItemBodyLabel">Notes / summary</label>
+                            <textarea id="refItemBody" class="form-control entry-textarea" rows="8" placeholder="Markdown supported. Tables, lists, code blocks all render."></textarea>
+                        </div>
+                        <div class="col-12" id="refItemImageRow">
+                            <label class="form-label">Image <span class="text-muted small">(optional)</span></label>
+                            <div id="refItemImagePreview" class="ref-item-image-preview"></div>
+                            <div class="entry-image-drop" id="refItemImageDrop">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>Drag an image here, or <button type="button" class="btn btn-link p-0" id="refItemImagePickBtn">click to choose</button></span>
+                                <input type="file" id="refItemImageFile" accept="image/*" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Tags <span class="text-muted small">(optional)</span></label>
+                            <div id="refItemTagsBox" class="tag-input-box"></div>
+                            <input type="text" id="refItemTagInput" class="form-control mt-1" placeholder="Type a tag and press Enter">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger me-auto" id="refItemDeleteBtn" style="display:none;"><i class="fas fa-trash me-1"></i>Delete</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="refItemSaveBtn"><i class="fas fa-save me-1"></i>Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MKSAP unlock prompt -->
+    <div class="modal fade" id="mksapUnlockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-unlock me-2"></i>Unlock MKSAP Boards Basics</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>This section is gated by a separate password.</p>
+                    <input type="password" id="mksapPasswordInput" class="form-control" placeholder="MKSAP password" autocomplete="off">
+                    <div class="alert alert-danger mt-2" id="mksapUnlockError" style="display:none;">Wrong password.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="mksapUnlockSubmit">Unlock</button>
                 </div>
             </div>
         </div>
