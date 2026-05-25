@@ -69,6 +69,16 @@
 <button id="backupBtn">Download backup</button>
 <div id="backupStatus"></div>
 
+<hr>
+
+<h2>4. Seed extra KV sections (one-time, after deploy)</h2>
+<p><small class="muted">Populates the new list sections. Uses the editor password from above.</small></p>
+<div class="actions" style="margin-top:0.8rem;">
+  <button id="seedDotPhrasesBtn">Seed dot phrases (~84 entries)</button>
+  <button id="seedAntibiogramBtn">Seed UCI Antibiogram (2-page sample)</button>
+</div>
+<div id="seedExtraStatus"></div>
+
 <script>
 const $ = id => document.getElementById(id);
 
@@ -185,6 +195,64 @@ $('uploadSeedBtn').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = 'Seed from uploaded file';
   }
+});
+
+async function seedListSection(section, items, btn, label) {
+  const s = $('seedExtraStatus');
+  s.className = ''; s.textContent = '';
+  const pw = $('seedPw').value;
+  if (!pw) { s.className = 'err'; s.textContent = 'Enter the editor password above.'; return; }
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Seeding...';
+  try {
+    const r = await fetch('/api/seed-list', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section, items }),
+    });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error || `HTTP ${r.status}`);
+    s.className = 'ok';
+    s.textContent = `✓ ${label}: seeded ${result.count} items.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `${label} failed: ${e.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+$('seedDotPhrasesBtn').addEventListener('click', async () => {
+  const btn = $('seedDotPhrasesBtn');
+  try {
+    const fr = await fetch('dotphrases-seed.json', { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`dotphrases-seed.json: HTTP ${fr.status}`);
+    const items = await fr.json();
+    await seedListSection('dot-phrases', items, btn, 'Dot phrases');
+  } catch (e) {
+    const s = $('seedExtraStatus');
+    s.className = 'err'; s.textContent = `Dot phrases failed: ${e.message}`;
+  }
+});
+
+$('seedAntibiogramBtn').addEventListener('click', async () => {
+  const btn = $('seedAntibiogramBtn');
+  const now = new Date().toISOString();
+  const items = [{
+    id: 'uci-2025',
+    title: 'UCI Antibiogram 2025 (with 2024 data)',
+    url: null,
+    body: 'Cumulative susceptibility data from UCI Medical Center.',
+    images: [
+      'https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/uci-antibiogram-pages/page-1.jpg',
+      'https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/uci-antibiogram-pages/page-2.jpg',
+    ],
+    image: 'https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/uci-antibiogram-pages/page-1.jpg',
+    tags: [],
+    createdAt: now,
+    updatedAt: now,
+  }];
+  await seedListSection('uci-antibiogram', items, btn, 'UCI Antibiogram');
 });
 
 $('backupBtn').addEventListener('click', async () => {

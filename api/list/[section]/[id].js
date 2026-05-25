@@ -11,6 +11,8 @@ const SECTIONS = {
     'abx-extras':         { writeAuth: 'EDITOR_PASSWORD' },
     'uci-antibiogram':    { writeAuth: 'EDITOR_PASSWORD' },
     'uw-toc-overrides':   { writeAuth: 'EDITOR_PASSWORD' },
+    'usmle-toc-overrides':{ writeAuth: 'EDITOR_PASSWORD' },
+    'dot-phrases':        { writeAuth: 'EDITOR_PASSWORD' },
     'mksap':              { writeAuth: 'MKSAP_PASSWORD'  },
 };
 

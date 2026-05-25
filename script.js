@@ -7,9 +7,9 @@
 // AES-GCM(256) ciphertext + iv + salt, base64-encoded. PBKDF2-SHA256, 200k iter.
 const SECRETS = {
   "clinicalDocUrl": {
-    "ct": "N8Vl1T8K4qz9XUCiIyqGR7ea6ONNb15cO79yfKzK4Ya6nyyZGEqTnQam8TDyGZwqWbi7WcjjQnd8SgGBdy7le1B5nKWNvlUe5QIVDXxtur/6WI/XBx6mbRCMLihqBpImd5yKWXikkJ5CnBTtN4AJSg==",
-    "iv": "8Gmbx3N7t1c88wYB",
-    "salt": "BzNNnuhOGajtk13s2pU5zA=="
+    "ct": "19vVXKkOWJBThT+9jeluG8IMzwQ5JmJRlVQ+58J9ZJqE5VEWlMJ6bqq4WQgfV8MDVmO4+yXnX5IKADgDaerkG8AHp7lZdwoQwdw93jGVS0vAuryFUg+EoM60gICX5Yx8rhoy9XkRqacZhK5uD8ZHtg==",
+    "iv": "Hcflkazrvu2JJX29",
+    "salt": "CBk7wJtAsMdS3rmbE1EDLw=="
   },
   "patientsSheetUrl": {
     "ct": "RnmvlZw+bQ3pQDjTbwBqX08Eb2TaFIg49LljU/OJJmNqu0aJ5q5CpLr7uRSSlkTEBwnAU/vVN3jNYcATmfAGw5OMjcm+jo7TiHc8V31eCCWOduC8hUGGQfLdjHMQQeSFRwGIlckJo43SgQTyxfiOjf/fCNw=",
@@ -25,26 +25,18 @@ const SECRETS = {
 const MKSAP_SENTINEL_PLAINTEXT = 'MKSAP_UNLOCKED';
 const PBKDF2_ITER = 200000;
 
-let dotphrasesData = [];
-
 // =========================================================================
 // Boot
 // =========================================================================
 
 $(document).ready(function () {
-    // Cache-bust on load so a fresh deploy is picked up immediately (avoids
-    // GitHub Pages CDN serving stale JSON for up to 10 min after a commit).
     const bust = `?v=${Date.now()}`;
     loadEntries(bust)
         .then(entries => {
             initKB(entries);
-            return fetch('dotphrases.txt' + bust, { cache: 'no-store' });
-        })
-        .then(r => r.text())
-        .then(text => {
-            parseDotphrases(text);
             $('#loading').hide();
         })
+        .then(() => initDotphrases(bust))
         .then(() => initHandbook(bust))
         .catch(err => {
             console.error('Error loading data:', err);
@@ -60,10 +52,18 @@ $(document).ready(function () {
         $(`#${section}-section`).addClass('active');
     });
 
-    // Secure gates — URLs decrypt only when correct password is entered.
-    // Both gates share the same password (SECRETS were encrypted together).
+    // Pull KV-stored SECRETS overrides BEFORE wiring gates so the very
+    // first unlock attempt uses the latest ciphertext. Promise-style — we
+    // don't block other init work on it.
+    loadSecretsFromKV();
+
+    // Secure gates — URLs decrypt only when the right password is entered.
+    // Each gate has its own password now (Clinical Reasoning uses
+    // ElaineCool, Patients uses ElaineHW). Both can be rotated from the UI
+    // via the change-password button next to the lock button.
     setupSecureGate({
         secretKey: 'clinicalDocUrl',
+        label: 'Clinical Reasoning',
         submitBtn: '#submit-password',
         passwordInput: '#doc-password',
         errorMsg: '#password-error',
@@ -71,10 +71,12 @@ $(document).ready(function () {
         container: '#document-container',
         iframe: '#google-doc-frame',
         lockBtn: '#lock-document',
+        changePwBtn: '#cr-change-password',
     });
 
     setupSecureGate({
         secretKey: 'patientsSheetUrl',
+        label: 'Patients',
         submitBtn: '#patients-submit',
         passwordInput: '#patients-password',
         errorMsg: '#patients-error',
@@ -82,24 +84,13 @@ $(document).ready(function () {
         container: '#patients-container',
         iframe: '#patients-frame',
         lockBtn: '#patients-lock',
+        changePwBtn: '#patients-change-password',
         unconfiguredMsg: 'Patient log not configured yet. Run tools/encrypt-urls.html to set up.',
     });
 
-    // Dotphrase search
-    $('#dotphraseSearch').on('keyup', function () {
-        const searchTerm = $(this).val().toLowerCase();
-        $('.dotphrase-item').each(function () {
-            const text = $(this).text().toLowerCase();
-            $(this).toggle(text.includes(searchTerm));
-        });
-    });
-
-    // Copy button for dotphrases
-    $(document).on('click', '.copy-btn', function () {
-        const btn = $(this);
-        const text = btn.closest('.dotphrase-item').find('.dotphrase-content').text();
-        copyTextToClipboard(text, btn[0]);
-    });
+    // Wire the change-password modal submit button (one shared modal for
+    // both gates; opens with context set by openChangePasswordModal).
+    document.getElementById('changePwSubmit')?.addEventListener('click', submitChangePassword);
 
     // Image modal handlers
     $('.close-modal').on('click', () => $('#imageModal').hide());
@@ -155,14 +146,57 @@ async function decryptSecret(password, secret) {
     return new TextDecoder().decode(plaintextBuf);
 }
 
+// PBKDF2 -> AES-GCM key for encryption (mirrors deriveAesKey, but with the
+// encrypt usage permission)
+async function deriveAesKeyForEncrypt(password, saltBuf) {
+    const baseKey = await crypto.subtle.importKey(
+        'raw', new TextEncoder().encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: saltBuf, iterations: PBKDF2_ITER, hash: 'SHA-256' },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt']
+    );
+}
+
+async function encryptSecret(password, plaintext) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv   = crypto.getRandomValues(new Uint8Array(12));
+    const key  = await deriveAesKeyForEncrypt(password, salt);
+    const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+    return { ct: bufToB64(ct), iv: bufToB64(iv), salt: bufToB64(salt) };
+}
+
+// On boot, try to fetch SECRETS overrides from KV. Falls back silently to
+// the baked SECRETS if KV is unreachable or empty. Resolves before the
+// gates are wired so the UI always sees the latest values.
+async function loadSecretsFromKV() {
+    try {
+        const r = await fetch('/api/secrets', { cache: 'no-store' });
+        if (!r.ok) return;
+        const { secrets } = await r.json();
+        if (!secrets || typeof secrets !== 'object') return;
+        for (const [k, v] of Object.entries(secrets)) {
+            if (v && v.ct && v.iv && v.salt) SECRETS[k] = v;
+        }
+    } catch (e) { /* offline or KV down — keep baked */ }
+}
+
 function setupSecureGate(opts) {
-    const secret = SECRETS[opts.secretKey];
+    // Look up the secret lazily so KV-loaded overrides take effect
+    const getSecret = () => SECRETS[opts.secretKey];
+    let currentPassword = null;   // remembered while unlocked, for change-password flow
+    let currentPlaintext = null;  // ditto
+
     const submit = async () => {
         const $err = $(opts.errorMsg);
         const $pw = $(opts.passwordInput);
         const $submit = $(opts.submitBtn);
         const password = $pw.val();
         $err.hide();
+        const secret = getSecret();
         if (!secret) {
             $err.text(opts.unconfiguredMsg || 'This gate is not configured yet.').show();
             return;
@@ -170,6 +204,8 @@ function setupSecureGate(opts) {
         $submit.prop('disabled', true);
         try {
             const url = await decryptSecret(password, secret);
+            currentPassword = password;
+            currentPlaintext = url;
             $(opts.gate).hide();
             $(opts.container).show();
             $(opts.iframe).attr('src', url);
@@ -187,11 +223,93 @@ function setupSecureGate(opts) {
         if (e.which === 13) submit();
     });
     $(opts.lockBtn).on('click', function () {
+        currentPassword = null;
+        currentPlaintext = null;
         $(opts.container).hide();
         $(opts.gate).show();
         $(opts.iframe).attr('src', '');
         $(opts.passwordInput).val('');
     });
+
+    // Wire the "change password" button (next to the lock button in the
+    // unlocked container). Each gate uses its own button id.
+    if (opts.changePwBtn) {
+        $(opts.changePwBtn).on('click', () => {
+            if (!currentPassword || !currentPlaintext) return;
+            openChangePasswordModal({
+                secretKey: opts.secretKey,
+                currentPassword,
+                plaintext: currentPlaintext,
+                label: opts.label || opts.secretKey,
+                onSuccess: (newPassword) => { currentPassword = newPassword; },
+            });
+        });
+    }
+}
+
+// ----- In-UI password rotation ------------------------------------------
+// Decrypts the secret with the current password (proves the user knows it),
+// re-encrypts with the new password, PUTs to /api/secrets (so all browsers
+// see the change immediately on next page load), and updates the in-memory
+// SECRETS object so the current session continues to work.
+
+let _changePwCtx = null;
+let _changePwModal = null;
+
+function openChangePasswordModal(ctx) {
+    _changePwCtx = ctx;
+    if (!_changePwModal) {
+        _changePwModal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
+    }
+    document.getElementById('changePwLabel').textContent = `Change password — ${ctx.label}`;
+    document.getElementById('changePwCurrent').value = '';
+    document.getElementById('changePwNew').value = '';
+    document.getElementById('changePwConfirm').value = '';
+    document.getElementById('changePwError').style.display = 'none';
+    _changePwModal.show();
+}
+
+async function submitChangePassword() {
+    const ctx = _changePwCtx;
+    if (!ctx) return;
+    const errEl = document.getElementById('changePwError');
+    const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+    errEl.style.display = 'none';
+
+    const current = document.getElementById('changePwCurrent').value;
+    const np = document.getElementById('changePwNew').value;
+    const cf = document.getElementById('changePwConfirm').value;
+    if (current !== ctx.currentPassword) { showErr('Current password is wrong.'); return; }
+    if (!np || np.length < 8) { showErr('New password must be 8+ characters.'); return; }
+    if (np !== cf) { showErr('New password and confirmation do not match.'); return; }
+    if (!EDITOR_STATE.apiPassword) {
+        showErr('Editor not unlocked. Open the Knowledge Base tab and unlock the editor first.');
+        return;
+    }
+
+    const btn = document.getElementById('changePwSubmit');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Updating...';
+    try {
+        const fresh = await encryptSecret(np, ctx.plaintext);
+        const r = await fetch('/api/secrets', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${EDITOR_STATE.apiPassword}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ secrets: { [ctx.secretKey]: fresh } }),
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        // Update in-memory so the current session stays usable
+        SECRETS[ctx.secretKey] = fresh;
+        if (ctx.onSuccess) ctx.onSuccess(np);
+        toast('Password updated.', 'success');
+        _changePwModal.hide();
+    } catch (e) {
+        showErr(`Update failed: ${e.message}`);
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-key me-1"></i>Update password';
+    }
 }
 
 // =========================================================================
@@ -201,6 +319,15 @@ function setupSecureGate(opts) {
 function openImageModal(imageUrl) {
     $('#modalImage').attr('src', imageUrl);
     $('#imageModal').show();
+}
+
+// Page-image URL template: substitute {n}, {n:03d}, {n:04d} with `n`.
+// Used by handbook + pdf-toc renderers. Supports any zero-padded width.
+function fillPageTemplate(tmpl, n) {
+    return String(tmpl).replace(/\{n(?::(\d+)d)?\}/g, (_, w) => {
+        const width = w ? parseInt(w, 10) : 0;
+        return String(n).padStart(width, '0');
+    });
 }
 
 function escapeHtml(text) {
@@ -726,43 +853,469 @@ function initKB(entries) {
 }
 
 // =========================================================================
-// Dot phrases (unchanged)
+// Dot Phrases — KB-style sidebar + card grid, editable, KV-backed.
 // =========================================================================
+// Data model (one record per phrase):
+//   { id, name, content, category, tags[], createdAt, updatedAt }
+// Source of truth: KV section `dot-phrases`. Falls back to dotphrases.txt
+// (static seed) on read failure so the tab still works during cold-starts.
 
-function parseDotphrases(text) {
-    const lines = text.split('\n');
-    let currentPhrase = null;
-    let content = [];
-    lines.forEach(line => {
-        if (line.startsWith('DOTPHRASE ')) {
-            if (currentPhrase) {
-                dotphrasesData.push({ title: currentPhrase, content: content.join('\n').trim() });
-            }
-            currentPhrase = line.replace('DOTPHRASE ', '').trim();
-            content = [];
-        } else if (currentPhrase) {
-            content.push(line);
+const DP_STATE = {
+    phrases: [],
+    query: '',
+    scope: 'all',
+    sort: 'title-asc',
+    category: null,         // single-select category filter
+    activeTags: new Set(),
+    favorites: new Set(),
+    recents: [],
+    expanded: new Set(),    // collapsed-by-default; toggle to expand
+    modal: null,
+    editing: null,          // phrase being edited (or null for add)
+    editingTags: [],
+};
+const DP_STORAGE = {
+    favorites: 'ecref.dp.favorites',
+    recents:   'ecref.dp.recents',
+};
+const DP_CATEGORIES = [
+    'Note Template', 'Communication', 'Procedure',
+    'Cardiac', 'Pulmonary', 'GI', 'Renal', 'ID', 'Neuro',
+    'Heme/Onc', 'Endo', 'Derm', 'Tox', 'MSK', 'Psych', 'OB/GYN', 'Other',
+];
+
+async function initDotphrases(bust) {
+    // Load preferences (favorites, recents)
+    try {
+        const f = JSON.parse(localStorage.getItem(DP_STORAGE.favorites) || '[]');
+        DP_STATE.favorites = new Set(Array.isArray(f) ? f : []);
+        const r = JSON.parse(localStorage.getItem(DP_STORAGE.recents) || '[]');
+        DP_STATE.recents = Array.isArray(r) ? r.slice(0, 12) : [];
+    } catch (e) { /* corrupt JSON — ignore */ }
+
+    // Fetch from KV; fall back to static dotphrases.txt
+    let phrases = [];
+    try {
+        const r = await fetch('/api/list/dot-phrases', { cache: 'no-store' });
+        if (r.ok) {
+            const j = await r.json();
+            phrases = j.items || [];
         }
-    });
-    if (currentPhrase) {
-        dotphrasesData.push({ title: currentPhrase, content: content.join('\n').trim() });
+    } catch (e) { /* swallow */ }
+    if (phrases.length === 0) {
+        try {
+            const r = await fetch('dotphrases.txt' + (bust || ''), { cache: 'no-store' });
+            if (r.ok) {
+                const text = await r.text();
+                phrases = parseDotphrasesText(text);
+            }
+        } catch (e) { /* nothing to fall back to */ }
     }
-    renderDotphrases();
+    DP_STATE.phrases = phrases;
+
+    DP_STATE.modal = new bootstrap.Modal(document.getElementById('dotphraseModal'));
+    wireDotphrasesUI();
+    renderDP();
 }
 
-function renderDotphrases() {
-    const container = $('#dotphrasesContent');
-    container.empty();
-    dotphrasesData.forEach(phrase => {
-        const item = $('<div class="dotphrase-item mb-3"></div>');
-        const title = $(`<div class="dotphrase-title d-flex justify-content-between align-items-center">
-            <span><i class="fas fa-file-medical me-2"></i>${escapeHtml(phrase.title)}</span>
-            <button class="btn btn-sm btn-primary copy-btn">Copy</button>
-        </div>`);
-        const content = $('<div class="dotphrase-content"></div>').text(phrase.content);
-        item.append(title).append(content);
-        container.append(item);
+function parseDotphrasesText(text) {
+    // Static-fallback parser; same format as the old dotphrases.txt.
+    // Returns records compatible with the KV schema so the renderer doesn't
+    // care which source the data came from.
+    const out = [];
+    let name = null;
+    let buf = [];
+    for (const line of text.split('\n')) {
+        const m = line.match(/^DOTPHRASE\s+(.+?)\s*$/);
+        if (m) {
+            if (name !== null) out.push(_makeDP(name, buf.join('\n').trim()));
+            name = m[1].trim();
+            buf = [];
+        } else if (name !== null) {
+            buf.push(line);
+        }
+    }
+    if (name !== null) out.push(_makeDP(name, buf.join('\n').trim()));
+    return out;
+}
+function _makeDP(name, content) {
+    return {
+        id: (name || 'phrase').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60),
+        name, content, category: 'Other', tags: [],
+        createdAt: null, updatedAt: null,
+    };
+}
+
+function saveDPPrefs() {
+    try {
+        localStorage.setItem(DP_STORAGE.favorites, JSON.stringify([...DP_STATE.favorites]));
+        localStorage.setItem(DP_STORAGE.recents, JSON.stringify(DP_STATE.recents.slice(0, 12)));
+    } catch (e) { /* quota / disabled — ignore */ }
+}
+
+function toggleDPFavorite(id) {
+    if (DP_STATE.favorites.has(id)) DP_STATE.favorites.delete(id);
+    else DP_STATE.favorites.add(id);
+    saveDPPrefs();
+}
+
+function pushDPRecent(id) {
+    DP_STATE.recents = [id, ...DP_STATE.recents.filter(r => r !== id)].slice(0, 12);
+    saveDPPrefs();
+}
+
+function applyDPFilters() {
+    const q = DP_STATE.query.trim().toLowerCase();
+    const tagSet = DP_STATE.activeTags;
+    const cat = DP_STATE.category;
+    return DP_STATE.phrases.filter(p => {
+        if (cat && p.category !== cat) return false;
+        if (tagSet.size && !(p.tags || []).some(t => tagSet.has(t))) return false;
+        if (!q) return true;
+        const name = (p.name || '').toLowerCase();
+        const body = (p.content || '').toLowerCase();
+        if (DP_STATE.scope === 'title') return name.includes(q);
+        if (DP_STATE.scope === 'body')  return body.includes(q);
+        return name.includes(q) || body.includes(q)
+            || (p.tags || []).some(t => t.toLowerCase().includes(q));
     });
+}
+
+function sortDPPhrases(list, mode) {
+    const cmp = {
+        'title-asc':       (a, b) => (a.name || '').localeCompare(b.name || ''),
+        'title-desc':      (a, b) => (b.name || '').localeCompare(a.name || ''),
+        'updatedAt-desc':  (a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''),
+        'createdAt-desc':  (a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''),
+    }[mode] || ((a, b) => 0);
+    return list.slice().sort(cmp);
+}
+
+function renderDPCard(phrase) {
+    const isFav = DP_STATE.favorites.has(phrase.id);
+    const isExpanded = DP_STATE.expanded.has(phrase.id);
+    const catClass = categoryClass(phrase.category);
+    const tagsHtml = (phrase.tags || []).map(t =>
+        `<button type="button" class="tag-chip" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`
+    ).join('');
+    const updated = phrase.updatedAt ? relativeTime(phrase.updatedAt) : '';
+    const canEdit = editorReadyHtml();
+    return `<article class="kb-card${isExpanded ? ' expanded' : ''}" data-dp-id="${escapeHtml(phrase.id)}">
+        <header class="kb-card-head" data-dp-toggle="${escapeHtml(phrase.id)}">
+            <button type="button" class="kb-fav${isFav ? ' on' : ''}" data-dp-fav="${escapeHtml(phrase.id)}" aria-label="${isFav ? 'Unfavorite' : 'Favorite'}">
+                <i class="${isFav ? 'fas' : 'far'} fa-star"></i>
+            </button>
+            <div class="kb-card-titles">
+                <h5 class="kb-card-title"><i class="fas fa-file-medical me-2 text-muted"></i>${escapeHtml(phrase.name || '(no name)')}</h5>
+                <div class="kb-card-meta">
+                    <span class="kb-cat-badge ${catClass}">${escapeHtml(phrase.category || 'Other')}</span>
+                    ${tagsHtml}
+                    ${updated ? `<span class="kb-card-time"><i class="far fa-clock me-1"></i>${escapeHtml(updated)}</span>` : ''}
+                </div>
+            </div>
+            <button type="button" class="kb-copy" data-dp-copy="${escapeHtml(phrase.id)}" title="Copy phrase">
+                <i class="far fa-copy"></i>
+            </button>
+            <button type="button" class="kb-expand" aria-label="Expand" data-dp-toggle="${escapeHtml(phrase.id)}">
+                <i class="fas fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
+            </button>
+        </header>
+        ${isExpanded ? `<div class="kb-card-body">
+            <pre class="dp-content">${escapeHtml(phrase.content || '')}</pre>
+            <div class="kb-card-actions">
+                <button type="button" class="btn btn-sm btn-primary" data-dp-copy="${escapeHtml(phrase.id)}">
+                    <i class="far fa-copy me-1"></i>Copy phrase
+                </button>
+                ${canEdit ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-dp-edit="${escapeHtml(phrase.id)}">
+                    <i class="fas fa-edit me-1"></i>Edit
+                </button>` : ''}
+            </div>
+        </div>` : ''}
+    </article>`;
+}
+
+function renderDPSidebar() {
+    const counts = {};
+    for (const p of DP_STATE.phrases) {
+        const c = p.category || 'Other';
+        counts[c] = (counts[c] || 0) + 1;
+    }
+    const cats = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+    document.getElementById('dpCategories').innerHTML = cats.map(([c, n]) => `
+        <li><a href="#" class="kb-cat-link${DP_STATE.category === c ? ' active' : ''}" data-dp-cat="${escapeHtml(c)}">
+            <span class="kb-cat-dot ${categoryClass(c)}"></span>
+            <span class="kb-cat-name">${escapeHtml(c)}</span>
+            <span class="kb-cat-count">${n}</span>
+        </a></li>`).join('');
+
+    const byId = new Map(DP_STATE.phrases.map(p => [p.id, p]));
+    const favs = [...DP_STATE.favorites].map(id => byId.get(id)).filter(Boolean).slice(0, 12);
+    document.getElementById('dpFavorites').innerHTML = favs.length
+        ? favs.map(p => `<li><a href="#" data-dp-jump="${escapeHtml(p.id)}">${escapeHtml(p.name)}</a></li>`).join('')
+        : '<li class="kb-empty-mini">No favorites yet.</li>';
+
+    const recents = DP_STATE.recents.map(id => byId.get(id)).filter(Boolean).slice(0, 8);
+    document.getElementById('dpRecents').innerHTML = recents.length
+        ? recents.map(p => `<li><a href="#" data-dp-jump="${escapeHtml(p.id)}">${escapeHtml(p.name)}</a></li>`).join('')
+        : '<li class="kb-empty-mini">No recents yet.</li>';
+}
+
+function renderDPActiveFilters() {
+    const chips = [];
+    if (DP_STATE.category) {
+        chips.push(`<span class="filter-chip">${escapeHtml(DP_STATE.category)}
+            <button type="button" data-dp-cat-clear>&times;</button></span>`);
+    }
+    for (const t of DP_STATE.activeTags) {
+        chips.push(`<span class="filter-chip">#${escapeHtml(t)}
+            <button type="button" data-dp-tag-clear="${escapeHtml(t)}">&times;</button></span>`);
+    }
+    document.getElementById('dpActiveFilters').innerHTML = chips.join('');
+}
+
+function renderDP() {
+    const filtered = sortDPPhrases(applyDPFilters(), DP_STATE.sort);
+    const cards = document.getElementById('dpCards');
+    const count = document.getElementById('dpCount');
+    const empty = document.getElementById('dpEmpty');
+
+    count.textContent = `${filtered.length} of ${DP_STATE.phrases.length} dot phrase${filtered.length === 1 ? '' : 's'}`;
+    if (!filtered.length) {
+        cards.innerHTML = '';
+        empty.style.display = 'block';
+    } else {
+        empty.style.display = 'none';
+        cards.innerHTML = filtered.map(renderDPCard).join('');
+    }
+    renderDPSidebar();
+    renderDPActiveFilters();
+}
+
+function jumpToDPCard(id) {
+    DP_STATE.expanded.add(id);
+    pushDPRecent(id);
+    renderDP();
+    setTimeout(() => {
+        const el = document.querySelector(`[data-dp-id="${CSS.escape(id)}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+}
+
+function wireDotphrasesUI() {
+    // Search
+    document.getElementById('dpSearch').addEventListener('input', e => {
+        DP_STATE.query = e.target.value;
+        renderDP();
+    });
+    // Scope radios
+    document.querySelectorAll('input[name="dpScope"]').forEach(el => {
+        el.addEventListener('change', () => {
+            DP_STATE.scope = document.querySelector('input[name="dpScope"]:checked').value;
+            renderDP();
+        });
+    });
+    // Sort
+    document.getElementById('dpSort').addEventListener('change', e => {
+        DP_STATE.sort = e.target.value;
+        renderDP();
+    });
+    // Add
+    document.getElementById('dpAddBtn').addEventListener('click', () => requireEditor(() => openDPEditor(null)));
+    // Sidebar toggle
+    document.getElementById('dpSidebarToggle').addEventListener('click', () => {
+        document.getElementById('dpSidebar').classList.toggle('open');
+    });
+
+    // Delegated clicks on the card grid
+    document.getElementById('dpCards').addEventListener('click', e => {
+        const fav = e.target.closest('[data-dp-fav]');
+        if (fav) { e.stopPropagation(); toggleDPFavorite(fav.dataset.dpFav); renderDP(); return; }
+
+        const copyBtn = e.target.closest('[data-dp-copy]');
+        if (copyBtn) {
+            e.stopPropagation();
+            const p = DP_STATE.phrases.find(x => x.id === copyBtn.dataset.dpCopy);
+            if (p) {
+                copyTextToClipboard(p.content, copyBtn);
+                pushDPRecent(p.id);
+            }
+            return;
+        }
+
+        const editBtn = e.target.closest('[data-dp-edit]');
+        if (editBtn) {
+            e.stopPropagation();
+            requireEditor(() => {
+                const p = DP_STATE.phrases.find(x => x.id === editBtn.dataset.dpEdit);
+                if (p) openDPEditor(p);
+            });
+            return;
+        }
+
+        const toggle = e.target.closest('[data-dp-toggle]');
+        if (toggle) {
+            const id = toggle.dataset.dpToggle;
+            if (DP_STATE.expanded.has(id)) DP_STATE.expanded.delete(id);
+            else { DP_STATE.expanded.add(id); pushDPRecent(id); }
+            renderDP();
+            return;
+        }
+
+        const tag = e.target.closest('[data-tag]');
+        if (tag) {
+            DP_STATE.activeTags.add(tag.dataset.tag);
+            renderDP();
+            return;
+        }
+    });
+
+    // Sidebar click handlers
+    document.getElementById('dpCategories').addEventListener('click', e => {
+        const link = e.target.closest('[data-dp-cat]');
+        if (!link) return;
+        e.preventDefault();
+        const cat = link.dataset.dpCat;
+        DP_STATE.category = (DP_STATE.category === cat) ? null : cat;
+        renderDP();
+    });
+    document.getElementById('dpSidebar').addEventListener('click', e => {
+        const jump = e.target.closest('[data-dp-jump]');
+        if (jump) { e.preventDefault(); jumpToDPCard(jump.dataset.dpJump); }
+    });
+    document.getElementById('dpActiveFilters').addEventListener('click', e => {
+        if (e.target.closest('[data-dp-cat-clear]')) { DP_STATE.category = null; renderDP(); return; }
+        const tagClear = e.target.closest('[data-dp-tag-clear]');
+        if (tagClear) { DP_STATE.activeTags.delete(tagClear.dataset.dpTagClear); renderDP(); }
+    });
+
+    // Editor modal wiring
+    wireDPEditor();
+}
+
+// ----- Dot phrase editor modal -----
+
+function wireDPEditor() {
+    const tagInput = document.getElementById('dpTagInput');
+    tagInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const v = tagInput.value.trim();
+            if (v && !DP_STATE.editingTags.includes(v)) {
+                DP_STATE.editingTags.push(v);
+                renderDPEditTags();
+            }
+            tagInput.value = '';
+        }
+    });
+    document.getElementById('dpTagsBox').addEventListener('click', e => {
+        const rm = e.target.closest('[data-rm-tag]');
+        if (rm) {
+            DP_STATE.editingTags = DP_STATE.editingTags.filter(t => t !== rm.dataset.rmTag);
+            renderDPEditTags();
+        }
+    });
+    document.getElementById('dpSaveBtn').addEventListener('click', saveDPFromEditor);
+    document.getElementById('dpDeleteBtn').addEventListener('click', () => {
+        if (DP_STATE.editing && confirm(`Delete "${DP_STATE.editing.name}"?`)) deleteDP(DP_STATE.editing.id);
+    });
+}
+
+function renderDPEditTags() {
+    document.getElementById('dpTagsBox').innerHTML = DP_STATE.editingTags.map(t =>
+        `<span class="editor-tag-chip">${escapeHtml(t)} <button type="button" data-rm-tag="${escapeHtml(t)}" aria-label="Remove tag">&times;</button></span>`
+    ).join('');
+}
+
+function openDPEditor(phrase) {
+    DP_STATE.editing = phrase;
+    DP_STATE.editingTags = (phrase?.tags || []).slice();
+
+    document.getElementById('dotphraseModalLabel').textContent = phrase ? `Edit — ${phrase.name}` : 'Add dot phrase';
+    document.getElementById('dpName').value = phrase?.name || '';
+    document.getElementById('dpCategory').value = phrase?.category || 'Note Template';
+    document.getElementById('dpContent').value = phrase?.content || '';
+    document.getElementById('dpDeleteBtn').style.display = phrase ? 'inline-block' : 'none';
+    renderDPEditTags();
+
+    DP_STATE.modal.show();
+}
+
+async function saveDPFromEditor() {
+    const password = EDITOR_STATE.apiPassword;
+    if (!password) { toast('Editor not unlocked.', 'error'); return; }
+    const name = document.getElementById('dpName').value.trim();
+    const content = document.getElementById('dpContent').value;
+    if (!name)    { toast('Name is required.', 'error'); return; }
+    if (!content.trim()) { toast('Content is required.', 'error'); return; }
+
+    const existing = DP_STATE.editing;
+    const now = new Date().toISOString();
+    const id = existing?.id || (name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) + '-' + Date.now().toString(36));
+    const record = {
+        id,
+        name,
+        content,
+        category: document.getElementById('dpCategory').value,
+        tags: DP_STATE.editingTags.slice(),
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+    };
+
+    const btn = document.getElementById('dpSaveBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+    try {
+        const url = existing
+            ? `/api/list/dot-phrases/${encodeURIComponent(id)}`
+            : '/api/list/dot-phrases';
+        const r = await fetch(url, {
+            method: existing ? 'PUT' : 'POST',
+            headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(record),
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        // Optimistic in-memory update
+        if (existing) {
+            DP_STATE.phrases = DP_STATE.phrases.map(p => p.id === id ? record : p);
+        } else {
+            DP_STATE.phrases.push(record);
+        }
+        toast(existing ? 'Updated.' : 'Added.', 'success');
+        DP_STATE.modal.hide();
+        renderDP();
+    } catch (e) {
+        toast(`Save failed: ${e.message}`, 'error', { duration: 5000 });
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-save me-1"></i>Save';
+    }
+}
+
+async function deleteDP(id) {
+    const password = EDITOR_STATE.apiPassword;
+    if (!password) { toast('Editor not unlocked.', 'error'); return; }
+    try {
+        const r = await fetch(`/api/list/dot-phrases/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${password}` },
+        });
+        if (!r.ok) {
+            const j = await r.json().catch(() => ({}));
+            throw new Error(j.error || `HTTP ${r.status}`);
+        }
+        DP_STATE.phrases = DP_STATE.phrases.filter(p => p.id !== id);
+        DP_STATE.favorites.delete(id);
+        DP_STATE.recents = DP_STATE.recents.filter(r => r !== id);
+        DP_STATE.expanded.delete(id);
+        saveDPPrefs();
+        toast('Deleted.', 'success');
+        DP_STATE.modal.hide();
+        renderDP();
+    } catch (e) {
+        toast(`Delete failed: ${e.message}`, 'error', { duration: 5000 });
+    }
 }
 
 // =========================================================================
@@ -1727,7 +2280,7 @@ function loadHandbookEntry(entry, entryId) {
     // Build the image stack
     let html = '';
     for (let n = start; n <= end; n++) {
-        const src = tmpl.replace('{n:03d}', String(n).padStart(3, '0'));
+        const src = fillPageTemplate(tmpl, n);
         const eager = (n === start) ? 'eager' : 'lazy';
         html += `<figure class="handbook-page">
             <img src="${escapeHtml(src)}" alt="Page ${n}" loading="${eager}" decoding="async">
@@ -1831,12 +2384,17 @@ const REFERENCE_TOC = [
     { id: 'ebm', title: 'EBM articles', icon: 'fa-flask', type: 'list',
       section: 'ebm', dailyPick: true,
       subtitle: 'Landmark trials and evidence-based reference articles. One pick surfaces daily.' },
-    { id: 'g-uworld', title: 'UWorld', icon: 'fa-graduation-cap', items: [
+    { id: 'g-uworld', title: 'UWorld', icon: 'fa-graduation-cap', gated: 'mksap', items: [
         { id: 'uw-flowsheets', title: 'Flow Sheet Tables', icon: 'fa-table-list',
           type: 'pdf-toc',
           tocJson: 'uw-flowsheets-toc.json',
           overridesSection: 'uw-toc-overrides',
           subtitle: 'UWorld boards review tables and flowcharts (163 pages). Edit titles + categories with the pencil icon.' },
+        { id: 'usmle-inner-circle', title: 'Inner Circle Notes', icon: 'fa-book',
+          type: 'pdf-toc',
+          tocJson: 'usmle-inner-circle-toc.json',
+          overridesSection: 'usmle-toc-overrides',
+          subtitle: 'USMLE Inner Circle Step 2/3 notes (1168 pages). One entry per chapter; long stacks load lazily.' },
     ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
       section: 'mksap', dailyPick: true,
@@ -1966,6 +2524,13 @@ function refTocItemHtml(item) {
     </li>`;
 }
 
+function refFindParentGroup(id) {
+    for (const node of REFERENCE_TOC) {
+        if (Array.isArray(node.items) && node.items.some(c => c.id === id)) return node;
+    }
+    return null;
+}
+
 function loadReferenceItem(id) {
     const node = refFindById(id);
     if (!node) return;
@@ -1984,6 +2549,13 @@ function loadReferenceItem(id) {
     viewer.classList.remove('fill');
     viewer.classList.remove('pdf-toc-host');
     viewer.scrollTop = 0;
+
+    // If this item lives under a gated group, intercept and show the gate.
+    const parent = refFindParentGroup(id);
+    if (parent && parent.gated === 'mksap' && !REFERENCE_STATE.mksapUnlocked) {
+        renderGroupGate(parent, node);
+        return;
+    }
 
     switch (node.type) {
         case 'poster':      return renderPoster(node);
@@ -2026,6 +2598,26 @@ function renderEmbed(node) {
     </a>`;
 }
 
+// ----- Group gate (shown when a child of a gated group is clicked) -----
+function renderGroupGate(group, originalNode) {
+    const viewer = refViewer();
+    viewer.innerHTML = `
+        <div class="reference-mksap-gate">
+            <i class="fas fa-lock"></i>
+            <h5>${escapeHtml(group.title)} is locked</h5>
+            <p class="text-muted">Same password as MKSAP Boards Basics.</p>
+            <button class="btn btn-primary" id="groupGateUnlock">
+                <i class="fas fa-unlock me-1"></i>Unlock
+            </button>
+        </div>`;
+    document.getElementById('groupGateUnlock').addEventListener('click', () => {
+        document.getElementById('mksapPasswordInput').value = '';
+        document.getElementById('mksapUnlockError').style.display = 'none';
+        REFERENCE_STATE.mksapUnlockModal.show();
+    });
+    refActions().innerHTML = '';
+}
+
 // ----- External-only (iframe blocked by remote site) -----
 function renderExternal(node) {
     const viewer = refViewer();
@@ -2065,11 +2657,14 @@ async function renderAntibiogram(node) {
         const sorted = items.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         const latest = sorted[0];
         const older  = sorted.slice(1);
+        const latestImages = (latest.images && latest.images.length) ? latest.images
+                            : (latest.image ? [latest.image] : []);
         viewer.innerHTML = `
             <div class="reference-poster">
-                ${latest.image ? `<img src="${escapeHtml(latest.image)}" alt="${escapeHtml(latest.title)}">`
-                              : (latest.url ? `<p><a href="${escapeHtml(latest.url)}" target="_blank" rel="noopener">${escapeHtml(latest.title)}</a></p>` : '')}
-                <figcaption>${escapeHtml(latest.title)}${latest.createdAt ? ' — uploaded ' + escapeHtml(relativeTime(latest.createdAt)) : ''}</figcaption>
+                ${latestImages.length
+                    ? latestImages.map(u => `<img src="${escapeHtml(u)}" alt="${escapeHtml(latest.title)}" class="d-block mb-2">`).join('')
+                    : (latest.url ? `<p><a href="${escapeHtml(latest.url)}" target="_blank" rel="noopener">${escapeHtml(latest.title)}</a></p>` : '')}
+                <figcaption>${escapeHtml(latest.title)}${latestImages.length > 1 ? ` (${latestImages.length} pages)` : ''}${latest.createdAt ? ' — uploaded ' + escapeHtml(relativeTime(latest.createdAt)) : ''}</figcaption>
                 ${latest.body ? `<div class="reference-list-item-body mt-3 text-start">${renderRichText(latest.body)}</div>` : ''}
             </div>
             ${editorReadyHtml() ? `<div class="text-center mt-3">
@@ -2448,7 +3043,7 @@ function loadPdfTocEntry(node, entry) {
 
     let html = '';
     for (let n = start; n <= end; n++) {
-        const src = tmpl.replace('{n:03d}', String(n).padStart(3, '0'));
+        const src = fillPageTemplate(tmpl, n);
         const eager = (n === start) ? 'eager' : 'lazy';
         html += `<figure class="pdf-toc-page">
             <img src="${escapeHtml(src)}" alt="Page ${n}" loading="${eager}" decoding="async">
@@ -2605,7 +3200,8 @@ function renderListItemHtml(item, section) {
     const titleHtml = item.url
         ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title || '(no title)')}</a>`
         : escapeHtml(item.title || '(no title)');
-    const imgHtml = item.image ? `<img src="${escapeHtml(item.image)}" alt="">` : '';
+    const itemImages = (item.images && item.images.length) ? item.images : (item.image ? [item.image] : []);
+    const imgHtml = itemImages.map(u => `<img src="${escapeHtml(u)}" alt="">`).join('');
     const tagsHtml = (item.tags || []).length
         ? (item.tags || []).map(t => `<span class="badge bg-light text-dark">${escapeHtml(t)}</span>`).join(' ')
         : '';
@@ -2639,7 +3235,7 @@ function renderDailyPickHtml(items, sectionTitle) {
         </div>
         <div class="reference-pick-title">${titleHtml}</div>
         ${pick.body ? `<div class="reference-pick-body">${renderRichText(pick.body)}</div>` : ''}
-        ${pick.image ? `<div class="reference-pick-body"><img src="${escapeHtml(pick.image)}" alt=""></div>` : ''}
+        ${((pick.images && pick.images.length) ? pick.images : (pick.image ? [pick.image] : [])).map(u => `<div class="reference-pick-body"><img src="${escapeHtml(u)}" alt=""></div>`).join('')}
     </div>`;
 }
 
@@ -2729,11 +3325,12 @@ function wireRefItemModal() {
         }
     });
 
-    // Image picker
+    // Image picker — supports multi-select (and multi-file drop)
     document.getElementById('refItemImagePickBtn').addEventListener('click',
         () => document.getElementById('refItemImageFile').click());
     document.getElementById('refItemImageFile').addEventListener('change', e => {
-        if (e.target.files[0]) uploadRefItemImage(e.target.files[0]);
+        for (const f of e.target.files) uploadRefItemImage(f);
+        e.target.value = '';  // allow re-selecting the same file
     });
     const drop = document.getElementById('refItemImageDrop');
     drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
@@ -2741,7 +3338,7 @@ function wireRefItemModal() {
     drop.addEventListener('drop', e => {
         e.preventDefault();
         drop.classList.remove('drag');
-        if (e.dataTransfer.files[0]) uploadRefItemImage(e.dataTransfer.files[0]);
+        for (const f of e.dataTransfer.files) uploadRefItemImage(f);
     });
 
     document.getElementById('refItemSaveBtn').addEventListener('click', saveRefItem);
@@ -2762,22 +3359,29 @@ function renderRefItemTags() {
 
 function renderRefItemImagePreview() {
     const preview = document.getElementById('refItemImagePreview');
-    if (REFERENCE_STATE.refItemImage) {
-        preview.innerHTML = `<img src="${escapeHtml(REFERENCE_STATE.refItemImage)}" alt="">
-            <button type="button" class="btn btn-sm btn-outline-danger" id="refItemImageRemove">Remove</button>`;
-        document.getElementById('refItemImageRemove').addEventListener('click', () => {
-            REFERENCE_STATE.refItemImage = null;
+    const list = REFERENCE_STATE.refItemImages || [];
+    if (!list.length) { preview.innerHTML = ''; return; }
+    preview.innerHTML = list.map((url, i) => `
+        <span class="ref-item-image-thumb">
+            <img src="${escapeHtml(url)}" alt="">
+            <button type="button" class="ref-item-image-remove" data-rm-img="${i}" aria-label="Remove image">&times;</button>
+        </span>`).join('');
+    preview.querySelectorAll('[data-rm-img]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = Number(btn.dataset.rmImg);
+            REFERENCE_STATE.refItemImages.splice(idx, 1);
             renderRefItemImagePreview();
         });
-    } else {
-        preview.innerHTML = '';
-    }
+    });
 }
 
 function openRefItemModal(section, item) {
     REFERENCE_STATE.refItemSection = section;
     REFERENCE_STATE.refItem = item;
-    REFERENCE_STATE.refItemImage = item?.image || null;
+    // Multi-image: prefer `images` array; fall back to single `image` for old records
+    REFERENCE_STATE.refItemImages = item?.images && item.images.length
+        ? item.images.slice()
+        : (item?.image ? [item.image] : []);
     REFERENCE_STATE.refItemTags = (item?.tags || []).slice();
 
     document.getElementById('refItemModalLabel').textContent =
@@ -2826,7 +3430,7 @@ async function uploadRefItemImage(file) {
             throw new Error(j.error || `HTTP ${r.status}`);
         }
         const { url } = await r.json();
-        REFERENCE_STATE.refItemImage = url;
+        REFERENCE_STATE.refItemImages = (REFERENCE_STATE.refItemImages || []).concat(url);
         renderRefItemImagePreview();
         toast('Image uploaded.', 'success');
     } catch (e) {
@@ -2847,12 +3451,14 @@ async function saveRefItem() {
 
     const now = new Date().toISOString();
     const id = existing?.id || (slugify(title) + '-' + Date.now().toString(36));
+    const images = (REFERENCE_STATE.refItemImages || []).slice();
     const patch = {
         id,
         title,
         url: document.getElementById('refItemUrl').value.trim() || null,
         body: document.getElementById('refItemBody').value || '',
-        image: REFERENCE_STATE.refItemImage || null,
+        images,                                         // canonical multi-image field
+        image: images[0] || null,                       // back-compat: keep first as `image`
         tags: REFERENCE_STATE.refItemTags.slice(),
         updatedAt: now,
         createdAt: existing?.createdAt || now,
@@ -2942,10 +3548,10 @@ function wireMksapUnlock() {
             REFERENCE_STATE.mksapUnlocked = true;
             try { sessionStorage.setItem(REFERENCE_STORAGE.mksapPassword, pw); } catch (e) {}
             REFERENCE_STATE.mksapUnlockModal.hide();
-            toast('MKSAP unlocked.', 'success');
-            // Re-render if MKSAP is the active section
-            const mksapNode = refFindById('mksap');
-            if (mksapNode && REFERENCE_STATE.activeId === 'mksap') renderMksapSection(mksapNode);
+            toast('Unlocked.', 'success');
+            // Refresh whatever's currently visible — handles both the MKSAP
+            // section and any UWorld item that was gated behind this unlock.
+            if (REFERENCE_STATE.activeId) loadReferenceItem(REFERENCE_STATE.activeId);
         } catch (e) {
             err.textContent = e.message === 'MKSAP not configured.'
                 ? 'MKSAP not configured. Run tools/encrypt-urls.html to generate a sentinel.'

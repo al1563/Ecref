@@ -1,0 +1,137 @@
+{
+  "title": "USMLE Inner Circle \u2014 Step 2/3 Notes",
+  "pdfPath": "https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/USMLE_Inner_Circle_step23_Notes_2024.pdf",
+  "pageImagePath": "https://pub-2601b1bf40df47c5a0936edc7be74155.r2.dev/docs/usmle-inner-circle-pages/page-{n:04d}.jpg",
+  "sections": [
+    {
+      "title": "Internal Medicine",
+      "entries": [
+        {
+          "title": "Renal",
+          "page": 9,
+          "pageEnd": 64
+        },
+        {
+          "title": "Pulmonary",
+          "page": 65,
+          "pageEnd": 163
+        },
+        {
+          "title": "CVS",
+          "page": 164,
+          "pageEnd": 277
+        },
+        {
+          "title": "Endocrine",
+          "page": 278,
+          "pageEnd": 321
+        },
+        {
+          "title": "GIT",
+          "page": 469,
+          "pageEnd": 583
+        },
+        {
+          "title": "Blood & Oncology",
+          "page": 584,
+          "pageEnd": 623
+        },
+        {
+          "title": "Musculoskeletal",
+          "page": 624,
+          "pageEnd": 724
+        },
+        {
+          "title": "Dermatology",
+          "page": 725,
+          "pageEnd": 789
+        },
+        {
+          "title": "Short Subjects",
+          "page": 1001,
+          "pageEnd": 1094
+        }
+      ]
+    },
+    {
+      "title": "Neuro",
+      "entries": [
+        {
+          "title": "CNS, Eye, Ear",
+          "page": 790,
+          "pageEnd": 935
+        }
+      ]
+    },
+    {
+      "title": "Psych",
+      "entries": [
+        {
+          "title": "Psychiatry & Substance Abuse",
+          "page": 936,
+          "pageEnd": 1000
+        }
+      ]
+    },
+    {
+      "title": "OB/GYN",
+      "entries": [
+        {
+          "title": "Gynae & Reproductive Health",
+          "page": 322,
+          "pageEnd": 392
+        },
+        {
+          "title": "Obs",
+          "page": 393,
+          "pageEnd": 468
+        }
+      ]
+    },
+    {
+      "title": "Pediatrics",
+      "entries": [
+        {
+          "title": "General Paeds",
+          "page": 1095,
+          "pageEnd": 1102
+        }
+      ]
+    },
+    {
+      "title": "Geriatrics",
+      "entries": [
+        {
+          "title": "Geriatrics",
+          "page": 1103,
+          "pageEnd": 1107
+        }
+      ]
+    },
+    {
+      "title": "Public Health",
+      "entries": [
+        {
+          "title": "Public Health",
+          "page": 1108,
+          "pageEnd": 1120
+        },
+        {
+          "title": "Ethics & Communication",
+          "page": 1121,
+          "pageEnd": 1168
+        }
+      ]
+    },
+    {
+      "title": "Other",
+      "entries": [
+        {
+          "title": "Notes",
+          "page": 1,
+          "pageEnd": 8
+        }
+      ]
+    }
+  ]
+}
