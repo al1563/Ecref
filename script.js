@@ -2469,6 +2469,18 @@ function initReference() {
     document.getElementById('pdfTocOverrideReset')?.addEventListener('click', () => {
         if (confirm('Revert this entry to its default title and category?')) deletePdfTocOverride();
     });
+
+    // Delegated handler for the inline group-lock button (rendered by
+    // groupLockBtnHtml inside the right-pane actions area).
+    refActions().addEventListener('click', e => {
+        const btn = e.target.closest('[data-group-lock]');
+        if (!btn) return;
+        REFERENCE_STATE.mksapUnlocked = false;
+        REFERENCE_STATE.mksapPassword = null;
+        try { sessionStorage.removeItem(REFERENCE_STORAGE.mksapPassword); } catch (e) {}
+        toast('Locked.', 'info');
+        if (REFERENCE_STATE.activeId) loadReferenceItem(REFERENCE_STATE.activeId);
+    });
 }
 
 function refAllItems() {
@@ -2596,6 +2608,17 @@ function renderEmbed(node) {
     refActions().innerHTML = `<a href="${escapeHtml(node.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
         <i class="fas fa-external-link-alt me-1"></i>Open in new tab
     </a>`;
+}
+
+// HTML for an inline Lock button shown in the right-pane header when the
+// active item lives under a gated group AND we're currently unlocked.
+// Empty string otherwise. Click handling is delegated once (see initReference).
+function groupLockBtnHtml(node) {
+    const parent = refFindParentGroup(node?.id);
+    if (!parent || parent.gated !== 'mksap' || !REFERENCE_STATE.mksapUnlocked) return '';
+    return ` <button class="btn btn-sm btn-outline-secondary ms-2" data-group-lock="${escapeHtml(parent.id)}" title="Lock ${escapeHtml(parent.title)}">
+        <i class="fas fa-lock me-1"></i>Lock
+    </button>`;
 }
 
 // ----- Group gate (shown when a child of a gated group is clicked) -----
@@ -2873,7 +2896,7 @@ async function renderPdfToc(node) {
     refActions().innerHTML = `<span class="text-muted small">${totalEntries} entries${overrideCount ? ` · ${overrideCount} edited` : ''}</span>
         <a href="${escapeHtml(baseToc.pdfPath)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary ms-2">
             <i class="fas fa-file-pdf me-1"></i>PDF
-        </a>`;
+        </a>${groupLockBtnHtml(node)}`;
 
     viewer.innerHTML = `
         <div class="pdf-toc-layout">
@@ -3061,7 +3084,7 @@ function loadPdfTocEntry(node, entry) {
     actions.innerHTML = `<span class="text-muted small me-2">${pages}</span>
         <a href="${escapeHtml(state.baseToc.pdfPath)}#page=${start}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-file-pdf me-1"></i>PDF
-        </a>`;
+        </a>${groupLockBtnHtml(node)}`;
 }
 
 // ----- PDF TOC override editor modal -----
