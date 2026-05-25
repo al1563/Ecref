@@ -2395,6 +2395,10 @@ const REFERENCE_TOC = [
           tocJson: 'usmle-inner-circle-toc.json',
           overridesSection: 'usmle-toc-overrides',
           subtitle: 'USMLE Inner Circle Step 2/3 notes (1168 pages). One entry per chapter; long stacks load lazily.' },
+        { id: 'uw-learning-cards', title: 'Learning Cards', icon: 'fa-clipboard-list',
+          type: 'list',
+          section: 'uw', dailyPick: true,
+          subtitle: 'Personal learning cards — notes, mnemonics, key teaching points. One surfaces daily.' },
     ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
       section: 'mksap', dailyPick: true,
@@ -2687,7 +2691,7 @@ async function renderAntibiogram(node) {
                     ? latestImages.map(u => `<img src="${escapeHtml(u)}" alt="${escapeHtml(latest.title)}" class="d-block mb-2">`).join('')
                     : (latest.url ? `<p><a href="${escapeHtml(latest.url)}" target="_blank" rel="noopener">${escapeHtml(latest.title)}</a></p>` : '')}
                 <figcaption>${escapeHtml(latest.title)}${latestImages.length > 1 ? ` (${latestImages.length} pages)` : ''}${latest.createdAt ? ' — uploaded ' + escapeHtml(relativeTime(latest.createdAt)) : ''}</figcaption>
-                ${latest.body ? `<div class="reference-list-item-body mt-3 text-start">${renderRichText(latest.body)}</div>` : ''}
+                ${latest.body ? `<div class="reference-list-item-body mt-3 text-start">${renderBody(latest.body)}</div>` : ''}
             </div>
             ${editorReadyHtml() ? `<div class="text-center mt-3">
                 <button class="btn btn-sm btn-outline-primary" data-ref-edit="${escapeHtml(node.section)}/${escapeHtml(latest.id)}">
@@ -3238,7 +3242,7 @@ function renderListItemHtml(item, section) {
                 <button class="btn btn-outline-danger" data-ref-delete="${escapeHtml(section)}/${escapeHtml(item.id)}" title="Delete"><i class="fas fa-trash"></i></button>
             </div>` : ''}
         </div>
-        ${item.body ? `<div class="reference-list-item-body">${renderRichText(item.body)}</div>` : ''}
+        ${item.body ? `<div class="reference-list-item-body">${renderBody(item.body)}</div>` : ''}
         ${imgHtml}
         <div class="reference-list-item-meta">${tagsHtml}${dateHtml}</div>
     </div>`;
@@ -3256,7 +3260,7 @@ function renderDailyPickHtml(items, sectionTitle) {
             <i class="fas fa-star"></i>Today's ${escapeHtml(sectionTitle)} pick · ${escapeHtml(today)}
         </div>
         <div class="reference-pick-title">${titleHtml}</div>
-        ${pick.body ? `<div class="reference-pick-body">${renderRichText(pick.body)}</div>` : ''}
+        ${pick.body ? `<div class="reference-pick-body">${renderBody(pick.body)}</div>` : ''}
         ${((pick.images && pick.images.length) ? pick.images : (pick.image ? [pick.image] : [])).map(u => `<div class="reference-pick-body"><img src="${escapeHtml(u)}" alt=""></div>`).join('')}
     </div>`;
 }
@@ -3325,6 +3329,104 @@ function refreshActiveSection() {
 // =========================================================================
 // Reference item editor modal
 // =========================================================================
+
+// ----- Rich-text body editor (Quill + DOMPurify) ---------------------
+// Quill is loaded via CDN script tag. We init lazily the first time a
+// body field is asked for, since the Quill bundle is ~200 KB and we'd
+// rather not pay that cost if the user never opens the editor.
+
+let _refItemQuill = null;
+
+const SANITIZE_CONFIG = {
+    ALLOWED_TAGS: ['p', 'br', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                   'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'mark', 'sub', 'sup',
+                   'ul', 'ol', 'li',
+                   'a', 'blockquote', 'pre', 'code',
+                   'table', 'thead', 'tbody', 'tr', 'th', 'td',
+                   'img', 'hr'],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel', 'colspan', 'rowspan', 'class'],
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    ADD_ATTR: ['target'],
+};
+
+// Heuristic: a string is treated as HTML if it contains a closing tag.
+// (Plain text with stray `<50` won't false-positive.)
+function looksLikeHtml(s) {
+    return typeof s === 'string' && /<\/?[a-z][\s\S]*>/i.test(s);
+}
+
+function sanitizeHtml(html) {
+    if (!html) return '';
+    if (typeof DOMPurify === 'undefined') {
+        // CDN not loaded — fall back to escaping for safety
+        return escapeHtml(html);
+    }
+    let cleaned = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+    // Force external links to open in new tab + add rel for safety
+    cleaned = cleaned.replace(/<a (?![^>]*\btarget=)/gi, '<a target="_blank" rel="noopener" ');
+    return cleaned;
+}
+
+// Render the `body` field for display. Auto-detects HTML vs plain text
+// so existing plain-text entries keep working without migration.
+function renderBody(body) {
+    if (!body) return '';
+    if (looksLikeHtml(body)) return sanitizeHtml(body);
+    return renderRichText(body);
+}
+
+function getRefItemQuill() {
+    if (_refItemQuill || typeof Quill === 'undefined') return _refItemQuill;
+    _refItemQuill = new Quill('#refItemBody', {
+        theme: 'snow',
+        placeholder: 'Notes, summary, key teaching points... paste from MKSAP/UpToDate to preserve formatting.',
+        modules: {
+            toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['blockquote', 'code-block'],
+                ['link', 'image'],
+                [{ color: [] }, { background: [] }],
+                ['clean'],
+            ],
+            clipboard: {
+                // Quill's default already strips scripts; we sanitize again on save.
+            },
+        },
+    });
+    return _refItemQuill;
+}
+
+function setRefItemBody(body) {
+    const q = getRefItemQuill();
+    if (!q) {
+        // Fall back to a plain element if Quill failed to load
+        const el = document.getElementById('refItemBody');
+        if (el) el.textContent = body || '';
+        return;
+    }
+    if (looksLikeHtml(body)) {
+        q.root.innerHTML = sanitizeHtml(body);
+    } else if (body) {
+        q.setText(body);
+    } else {
+        q.setText('');
+    }
+}
+
+function getRefItemBody() {
+    const q = getRefItemQuill();
+    if (!q) {
+        const el = document.getElementById('refItemBody');
+        return el ? el.textContent : '';
+    }
+    // Use semantic HTML when available (Quill 2.x) for tidier output
+    const raw = (q.getSemanticHTML && q.getSemanticHTML()) || q.root.innerHTML;
+    // Empty editor emits "<p><br></p>" — collapse to empty string
+    if (/^\s*(<p>(<br>)?<\/p>\s*)+$/i.test(raw)) return '';
+    return sanitizeHtml(raw);
+}
 
 function wireRefItemModal() {
     const tagInput = document.getElementById('refItemTagInput');
@@ -3410,7 +3512,7 @@ function openRefItemModal(section, item) {
         item ? `Edit — ${item.title || section}` : `Add to ${sectionPrettyName(section)}`;
     document.getElementById('refItemTitle').value = item?.title || '';
     document.getElementById('refItemUrl').value = item?.url || '';
-    document.getElementById('refItemBody').value = item?.body || '';
+    setRefItemBody(item?.body || '');
     document.getElementById('refItemDeleteBtn').style.display = item ? 'inline-block' : 'none';
 
     // Antibiogram + abx-extras + UW often have images; EBM mostly URLs. Show image either way.
@@ -3423,7 +3525,7 @@ function openRefItemModal(section, item) {
 }
 
 function sectionPrettyName(s) {
-    return { ebm: 'EBM articles', uw: 'UW Learning Objectives', 'abx-extras': 'Antibiotics extras',
+    return { ebm: 'EBM articles', uw: 'UW Learning Cards', 'abx-extras': 'Antibiotics extras',
              'uci-antibiogram': 'UCI Antibiogram', mksap: 'MKSAP Boards Basics' }[s] || s;
 }
 
@@ -3478,7 +3580,7 @@ async function saveRefItem() {
         id,
         title,
         url: document.getElementById('refItemUrl').value.trim() || null,
-        body: document.getElementById('refItemBody').value || '',
+        body: getRefItemBody(),
         images,                                         // canonical multi-image field
         image: images[0] || null,                       // back-compat: keep first as `image`
         tags: REFERENCE_STATE.refItemTags.slice(),

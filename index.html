@@ -6,6 +6,7 @@
     <title>Medical Reference - UCI</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
     <link href="styles.css" rel="stylesheet">
 </head>
 <body>
@@ -18,7 +19,7 @@
                 <small class="opacity-75">UCI Medical Center - Clinical Guidelines & Database</small>
             </div>
             <div>
-                <span class="badge bg-light text-dark">v2026.7</span>
+                <span class="badge bg-light text-dark">v2026.8</span>
             </div>
         </div>
     </div>
@@ -826,7 +827,8 @@
                         </div>
                         <div class="col-12">
                             <label class="form-label" id="refItemBodyLabel">Notes / summary</label>
-                            <textarea id="refItemBody" class="form-control entry-textarea" rows="8" placeholder="Markdown supported. Tables, lists, code blocks all render."></textarea>
+                            <div id="refItemBody" class="ref-item-quill"></div>
+                            <small class="text-muted">Rich text. Paste from MKSAP, UpToDate, Word — formatting is preserved (scripts + styles stripped on save).</small>
                         </div>
                         <div class="col-12" id="refItemImageRow">
                             <label class="form-label">Image <span class="text-muted small">(optional)</span></label>
@@ -990,6 +992,8 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
 <script src="script.js"></script>
 
 </body>
