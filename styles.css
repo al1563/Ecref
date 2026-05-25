@@ -1868,3 +1868,34 @@ table.dataTable tbody td {
     overflow-x: auto;
     font-size: 0.84rem;
 }
+
+/* EBM / reference item: visible source domain link in the meta row */
+.reference-list-item-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--uci-blue);
+    text-decoration: none;
+    font-size: 0.78rem;
+    padding: 2px 8px;
+    background: #eef4fa;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: background 0.1s;
+}
+.reference-list-item-source:hover {
+    background: #dceaf7;
+    text-decoration: underline;
+}
+.reference-list-item-source i { font-size: 0.7rem; opacity: 0.85; }
+
+/* Small external-link glyph next to the title link */
+.reference-list-item-extlink {
+    font-size: 0.65em;
+    margin-left: 5px;
+    opacity: 0.55;
+    vertical-align: top;
+}
+.reference-list-item-title a:hover .reference-list-item-extlink {
+    opacity: 1;
+}

@@ -3222,9 +3222,14 @@ async function deletePdfTocOverride() {
 }
 
 // ----- Render a single list-item card -----
+function urlDomain(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ''); }
+    catch (e) { return ''; }
+}
+
 function renderListItemHtml(item, section) {
     const titleHtml = item.url
-        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title || '(no title)')}</a>`
+        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title || '(no title)')}<i class="fas fa-external-link-alt reference-list-item-extlink" aria-hidden="true"></i></a>`
         : escapeHtml(item.title || '(no title)');
     const itemImages = (item.images && item.images.length) ? item.images : (item.image ? [item.image] : []);
     const imgHtml = itemImages.map(u => `<img src="${escapeHtml(u)}" alt="">`).join('');
@@ -3233,6 +3238,13 @@ function renderListItemHtml(item, section) {
         : '';
     const dateHtml = item.updatedAt || item.createdAt
         ? `<span><i class="far fa-clock me-1"></i>${escapeHtml(relativeTime(item.updatedAt || item.createdAt))}</span>`
+        : '';
+    // Visible source link — shows the domain so users see at a glance
+    // where the link goes (2minutemedicine.com vs wikijournalclub.org).
+    const sourceHtml = item.url
+        ? `<a class="reference-list-item-source" href="${escapeHtml(item.url)}" target="_blank" rel="noopener" title="${escapeHtml(item.url)}">
+            <i class="fas fa-link"></i>${escapeHtml(urlDomain(item.url) || item.url)}
+           </a>`
         : '';
     return `<div class="reference-list-item" data-ref-item-id="${escapeHtml(item.id)}">
         <div class="reference-list-item-head">
@@ -3244,7 +3256,7 @@ function renderListItemHtml(item, section) {
         </div>
         ${item.body ? `<div class="reference-list-item-body">${renderBody(item.body)}</div>` : ''}
         ${imgHtml}
-        <div class="reference-list-item-meta">${tagsHtml}${dateHtml}</div>
+        <div class="reference-list-item-meta">${sourceHtml}${tagsHtml}${dateHtml}</div>
     </div>`;
 }
 
