@@ -76,6 +76,7 @@
 <div class="actions" style="margin-top:0.8rem;">
   <button id="seedDotPhrasesBtn">Seed dot phrases (~84 entries)</button>
   <button id="seedAntibiogramBtn">Seed UCI Antibiogram (2-page sample)</button>
+  <button id="seedEbmBtn">Seed EBM articles (~630 trials)</button>
 </div>
 <div id="seedExtraStatus"></div>
 
@@ -232,6 +233,20 @@ $('seedDotPhrasesBtn').addEventListener('click', async () => {
   } catch (e) {
     const s = $('seedExtraStatus');
     s.className = 'err'; s.textContent = `Dot phrases failed: ${e.message}`;
+  }
+});
+
+$('seedEbmBtn').addEventListener('click', async () => {
+  const btn = $('seedEbmBtn');
+  try {
+    const fr = await fetch('ebm-seed.json', { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`ebm-seed.json: HTTP ${fr.status}`);
+    const items = await fr.json();
+    if (!confirm(`Replace EBM articles with ${items.length} curated trials? Existing EBM items will be lost.`)) return;
+    await seedListSection('ebm', items, btn, 'EBM articles');
+  } catch (e) {
+    const s = $('seedExtraStatus');
+    s.className = 'err'; s.textContent = `EBM seed failed: ${e.message}`;
   }
 });
 
