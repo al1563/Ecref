@@ -2398,7 +2398,7 @@ const REFERENCE_TOC = [
     ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
       section: 'mksap', dailyPick: true,
-      subtitle: 'Password-gated. Boards Basics notes from your MKSAP account.' },
+      subtitle: '' },
 ];
 
 const REFERENCE_STATE = {
@@ -2605,7 +2605,6 @@ function renderGroupGate(group, originalNode) {
         <div class="reference-mksap-gate">
             <i class="fas fa-lock"></i>
             <h5>${escapeHtml(group.title)} is locked</h5>
-            <p class="text-muted">Same password as MKSAP Boards Basics.</p>
             <button class="btn btn-primary" id="groupGateUnlock">
                 <i class="fas fa-unlock me-1"></i>Unlock
             </button>
