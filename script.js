@@ -2400,8 +2400,8 @@ const REFERENCE_TOC = [
           section: 'uw', dailyPick: true,
           subtitle: 'Personal learning cards — notes, mnemonics, key teaching points. One surfaces daily.' },
     ]},
-    { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap',
-      section: 'mksap', dailyPick: true,
+    { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap-content',
+      dailyPick: true,
       subtitle: '' },
 ];
 
@@ -2579,8 +2579,9 @@ function loadReferenceItem(id) {
         case 'antibiogram': return renderAntibiogram(node);
         case 'external':    return renderExternal(node);
         case 'list':        return renderListSection(node);
-        case 'mksap':       return renderMksapSection(node);
-        case 'pdf-toc':     return renderPdfToc(node);
+        case 'mksap':         return renderMksapSection(node);
+        case 'mksap-content':  return renderMksapContentSection(node);
+        case 'pdf-toc':       return renderPdfToc(node);
         default:
             viewer.innerHTML = `<div class="alert alert-warning">Unknown reference type: ${escapeHtml(node.type || '')}</div>`;
     }
@@ -3697,4 +3698,269 @@ function wireMksapUnlock() {
     };
     submit.addEventListener('click', attempt);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+}
+
+// =========================================================================
+// MKSAP Content viewer — sub-TOC by subspecialty + lazy body load
+// =========================================================================
+
+const MKSAP_CONTENT_STATE = {
+    index: null,           // [{id, title, subspecialty, subspecialtyName, chapter, keyPoints}]
+    activeId: null,
+    query: '',
+    bodyCache: {},         // id -> html
+    showFullBody: false,   // toggled per topic; reset on each topic click
+};
+
+async function renderMksapContentSection(node) {
+    const viewer = refViewer();
+    viewer.classList.add('pdf-toc-host');
+
+    // Gate first — same MKSAP unlock as before
+    if (!REFERENCE_STATE.mksapUnlocked) {
+        viewer.innerHTML = `
+            <div class="reference-mksap-gate">
+                <i class="fas fa-lock"></i>
+                <h5>${escapeHtml(node.title)}</h5>
+                <button class="btn btn-primary" id="mksapShowUnlock">
+                    <i class="fas fa-unlock me-1"></i>Unlock
+                </button>
+            </div>`;
+        document.getElementById('mksapShowUnlock').addEventListener('click', () => {
+            document.getElementById('mksapPasswordInput').value = '';
+            document.getElementById('mksapUnlockError').style.display = 'none';
+            REFERENCE_STATE.mksapUnlockModal.show();
+        });
+        refActions().innerHTML = '';
+        return;
+    }
+
+    viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading MKSAP topics...</div>`;
+
+    // Load index (cache it)
+    if (!MKSAP_CONTENT_STATE.index) {
+        try {
+            const r = await fetch('/api/mksap-content', {
+                cache: 'no-store',
+                headers: { 'Authorization': `Bearer ${REFERENCE_STATE.mksapPassword}` },
+            });
+            if (!r.ok) {
+                if (r.status === 401) {
+                    REFERENCE_STATE.mksapUnlocked = false;
+                    try { sessionStorage.removeItem(REFERENCE_STORAGE.mksapPassword); } catch (e) {}
+                    return renderMksapContentSection(node);
+                }
+                throw new Error(`HTTP ${r.status}`);
+            }
+            const j = await r.json();
+            MKSAP_CONTENT_STATE.index = j.index || [];
+        } catch (e) {
+            viewer.innerHTML = `<div class="alert alert-warning">Couldn't load MKSAP topics: ${escapeHtml(e.message)}.<br>
+                If empty, visit /seed.html → "Seed MKSAP Topics" first.</div>`;
+            return;
+        }
+    }
+
+    const idx = MKSAP_CONTENT_STATE.index;
+    if (!idx.length) {
+        viewer.innerHTML = `<div class="alert alert-info">No MKSAP topics seeded yet. Visit
+            <a href="/seed.html" target="_blank">/seed.html</a> and click "Seed MKSAP Topics".</div>`;
+        return;
+    }
+
+    // Lock button + count in header
+    refActions().innerHTML = `<span class="text-muted small me-2">${idx.length} topics</span>
+        <button class="btn btn-sm btn-outline-secondary" id="mksapLockBtn">
+            <i class="fas fa-lock me-1"></i>Lock
+        </button>`;
+    document.getElementById('mksapLockBtn').addEventListener('click', () => {
+        REFERENCE_STATE.mksapUnlocked = false;
+        REFERENCE_STATE.mksapPassword = null;
+        try { sessionStorage.removeItem(REFERENCE_STORAGE.mksapPassword); } catch (e) {}
+        renderMksapContentSection(node);
+    });
+
+    viewer.innerHTML = `
+        <div class="pdf-toc-layout">
+            <aside class="pdf-toc-sidebar">
+                <div class="pdf-toc-search-wrap">
+                    <input type="search" class="form-control form-control-sm" id="mksapContentSearch" placeholder="Search ${idx.length} topics...">
+                </div>
+                <div class="pdf-toc-list" id="mksapContentList"></div>
+                <div class="pdf-toc-empty text-muted text-center py-3" id="mksapContentEmpty" style="display:none;">
+                    <i class="fas fa-search me-2"></i>No matches.
+                </div>
+            </aside>
+            <main class="pdf-toc-viewer mksap-content-viewer" id="mksapContentViewerPane">
+                <div class="pdf-toc-placeholder" id="mksapContentPlaceholder">
+                    <i class="fas fa-book-medical"></i>
+                    <p>Pick a topic on the left to view its key points.</p>
+                </div>
+            </main>
+        </div>`;
+
+    renderMksapContentSidebar(node);
+
+    // Show today's pick on first load (placeholder area)
+    if (node.dailyPick && !MKSAP_CONTENT_STATE.activeId) {
+        const pick = pickOfTheDay(idx);
+        if (pick) showMksapDailyPick(pick);
+    }
+
+    document.getElementById('mksapContentSearch').addEventListener('input', e => {
+        MKSAP_CONTENT_STATE.query = e.target.value;
+        renderMksapContentSidebar(node);
+    });
+
+    document.getElementById('mksapContentList').addEventListener('click', e => {
+        const link = e.target.closest('[data-mksap-id]');
+        if (!link) return;
+        e.preventDefault();
+        loadMksapTopic(link.dataset.mksapId);
+    });
+
+    if (MKSAP_CONTENT_STATE.activeId) {
+        loadMksapTopic(MKSAP_CONTENT_STATE.activeId);
+    }
+}
+
+function renderMksapContentSidebar(node) {
+    const q = (MKSAP_CONTENT_STATE.query || '').trim().toLowerCase();
+    const idx = MKSAP_CONTENT_STATE.index || [];
+
+    // Group by subspecialtyName, preserving stable order
+    const groups = new Map();
+    for (const t of idx) {
+        if (q && !(t.title || '').toLowerCase().includes(q)
+              && !(t.subspecialtyName || '').toLowerCase().includes(q)) continue;
+        const k = t.subspecialtyName || t.subspecialty || 'Other';
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(t);
+    }
+    // Sort each group by chapter number
+    for (const list of groups.values()) {
+        list.sort((a, b) => (a.chapter || 0) - (b.chapter || 0) || (a.title || '').localeCompare(b.title || ''));
+    }
+
+    const listEl = document.getElementById('mksapContentList');
+    const emptyEl = document.getElementById('mksapContentEmpty');
+    if (!groups.size) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+    }
+    emptyEl.style.display = 'none';
+
+    const sorted = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    listEl.innerHTML = sorted.map(([sub, topics]) => `
+        <div class="pdf-toc-section">
+            <div class="pdf-toc-section-title">${escapeHtml(sub)}</div>
+            <ul class="pdf-toc-entries">
+                ${topics.map(t => {
+                    const active = MKSAP_CONTENT_STATE.activeId === t.id;
+                    return `<li>
+                        <a href="#" class="pdf-toc-entry${active ? ' active' : ''}" data-mksap-id="${escapeHtml(t.id)}">
+                            <span class="pdf-toc-entry-title">${escapeHtml(t.title)}</span>
+                            <span class="pdf-toc-entry-page">ch.${t.chapter || '?'}</span>
+                        </a>
+                    </li>`;
+                }).join('')}
+            </ul>
+        </div>
+    `).join('');
+}
+
+function showMksapDailyPick(pick) {
+    const pane = document.getElementById('mksapContentViewerPane');
+    const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    pane.innerHTML = `
+        <div class="mksap-topic">
+            <div class="reference-pick mb-3">
+                <div class="reference-pick-label">
+                    <i class="fas fa-star"></i>Today's MKSAP pick · ${escapeHtml(today)}
+                </div>
+                <div class="reference-pick-title">
+                    <a href="#" data-mksap-id="${escapeHtml(pick.id)}">${escapeHtml(pick.title)}</a>
+                    <small class="text-muted ms-2">${escapeHtml(pick.subspecialtyName || '')} · ch.${pick.chapter || '?'}</small>
+                </div>
+                ${pick.keyPoints ? `<div class="mksap-keypoints-callout mt-2">${sanitizeHtml(pick.keyPoints)}</div>` : ''}
+            </div>
+            <p class="text-muted text-center">Pick a topic on the left for the full chapter.</p>
+        </div>`;
+    pane.querySelector('[data-mksap-id]')?.addEventListener('click', e => {
+        e.preventDefault();
+        loadMksapTopic(pick.id);
+    });
+}
+
+async function loadMksapTopic(id) {
+    const topic = (MKSAP_CONTENT_STATE.index || []).find(t => t.id === id);
+    if (!topic) return;
+    MKSAP_CONTENT_STATE.activeId = id;
+    MKSAP_CONTENT_STATE.showFullBody = false;
+    document.querySelectorAll('.pdf-toc-entry.active').forEach(el => el.classList.remove('active'));
+    document.querySelector(`[data-mksap-id="${CSS.escape(id)}"]`)?.classList.add('active');
+
+    const pane = document.getElementById('mksapContentViewerPane');
+    pane.innerHTML = `
+        <article class="mksap-topic">
+            <header class="mksap-topic-head">
+                <div class="mksap-topic-sub">${escapeHtml(topic.subspecialtyName || '')} · Chapter ${topic.chapter || '?'}</div>
+                <h2 class="mksap-topic-title">${escapeHtml(topic.title)}</h2>
+            </header>
+            ${topic.keyPoints
+                ? `<div class="mksap-keypoints-callout">
+                       <div class="mksap-keypoints-label"><i class="fas fa-key me-1"></i>Key Points</div>
+                       ${sanitizeHtml(topic.keyPoints)}
+                   </div>`
+                : '<div class="text-muted small">No key points extracted.</div>'}
+            <div class="mksap-body-controls">
+                <button class="btn btn-sm btn-outline-primary" id="mksapToggleBody">
+                    <i class="fas fa-chevron-down me-1"></i>Show full content
+                </button>
+            </div>
+            <div id="mksapBodyHost" class="mksap-body" style="display:none;"></div>
+        </article>`;
+    pane.scrollTop = 0;
+
+    document.getElementById('mksapToggleBody').addEventListener('click', () => toggleMksapBody(id));
+}
+
+async function toggleMksapBody(id) {
+    const btn = document.getElementById('mksapToggleBody');
+    const host = document.getElementById('mksapBodyHost');
+    if (!btn || !host) return;
+
+    if (host.style.display === 'block') {
+        host.style.display = 'none';
+        btn.innerHTML = '<i class="fas fa-chevron-down me-1"></i>Show full content';
+        return;
+    }
+
+    // Need to load the body
+    let html = MKSAP_CONTENT_STATE.bodyCache[id];
+    if (!html) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+        try {
+            const r = await fetch(`/api/mksap-content/${encodeURIComponent(id)}`, {
+                cache: 'no-store',
+                headers: { 'Authorization': `Bearer ${REFERENCE_STATE.mksapPassword}` },
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const j = await r.json();
+            html = j.body || '';
+            MKSAP_CONTENT_STATE.bodyCache[id] = html;
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-chevron-down me-1"></i>Show full content';
+            toast(`Body load failed: ${e.message}`, 'error');
+            return;
+        }
+        btn.disabled = false;
+    }
+
+    host.innerHTML = sanitizeHtml(html);
+    host.style.display = 'block';
+    btn.innerHTML = '<i class="fas fa-chevron-up me-1"></i>Hide full content';
 }

@@ -77,6 +77,7 @@
   <button id="seedDotPhrasesBtn">Seed dot phrases (~84 entries)</button>
   <button id="seedAntibiogramBtn">Seed UCI Antibiogram (2-page sample)</button>
   <button id="seedEbmBtn">Seed EBM articles (~630 trials)</button>
+  <button id="seedMksapBtn">Seed MKSAP Topics (~191 chapters)</button>
 </div>
 <div id="seedExtraStatus"></div>
 
@@ -233,6 +234,56 @@ $('seedDotPhrasesBtn').addEventListener('click', async () => {
   } catch (e) {
     const s = $('seedExtraStatus');
     s.className = 'err'; s.textContent = `Dot phrases failed: ${e.message}`;
+  }
+});
+
+$('seedMksapBtn').addEventListener('click', async () => {
+  const s = $('seedExtraStatus');
+  s.className = ''; s.textContent = '';
+  const pw = prompt('Enter MKSAP password (separate from editor password):');
+  if (!pw) return;
+  const btn = $('seedMksapBtn');
+  btn.disabled = true; btn.textContent = 'Loading seed JSON...';
+  try {
+    const fr = await fetch('mksap-content-seed.json', { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`mksap-content-seed.json: HTTP ${fr.status}`);
+    const data = await fr.json();
+    const ids = Object.keys(data.bodies || {});
+    if (!confirm(`Replace MKSAP topics with ${data.index.length} entries (${ids.length} bodies, ~6 MB total)? Splits into batches.`)) {
+      btn.disabled = false; btn.textContent = 'Seed MKSAP Topics (~191 chapters)';
+      return;
+    }
+    // 1) Send index alone first
+    btn.textContent = 'Seeding index...';
+    let r = await fetch('/api/mksap-content/seed', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: data.index }),
+    });
+    let j = await r.json();
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    // 2) Send bodies in batches of ~30 to keep each POST under ~1 MB
+    const BATCH = 30;
+    let totalBodies = 0;
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batchIds = ids.slice(i, i + BATCH);
+      const bodies = Object.fromEntries(batchIds.map(id => [id, data.bodies[id]]));
+      btn.textContent = `Seeding bodies ${i + 1}-${Math.min(i + BATCH, ids.length)} of ${ids.length}...`;
+      r = await fetch('/api/mksap-content/seed', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bodies }),
+      });
+      j = await r.json();
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      totalBodies += j.bodyCount || 0;
+    }
+    s.className = 'ok';
+    s.textContent = `✓ MKSAP seeded: ${data.index.length} index entries, ${totalBodies} bodies.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `MKSAP seed failed: ${e.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Seed MKSAP Topics (~191 chapters)';
   }
 });
 
