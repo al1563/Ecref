@@ -1847,6 +1847,7 @@ const _kbQuill = { data: null, template: null };
 
 function getKbQuill(which) {
     if (_kbQuill[which] || typeof Quill === 'undefined') return _kbQuill[which];
+    registerQuillExtensions();
     const id = which === 'data' ? '#entryData' : '#entryTemplate';
     _kbQuill[which] = new Quill(id, {
         theme: 'snow',
@@ -1863,6 +1864,9 @@ function getKbQuill(which) {
                 [{ color: [] }, { background: [] }],
                 ['clean'],
             ],
+            clipboard: {
+                matchers: quillClipboardMatchers(),
+            },
         },
     });
     return _kbQuill[which];
@@ -1875,13 +1879,7 @@ function setKbBody(which, body) {
         if (el) el.textContent = body || '';
         return;
     }
-    if (looksLikeHtml(body)) {
-        q.root.innerHTML = sanitizeHtml(body);
-    } else if (body) {
-        q.setText(body);
-    } else {
-        q.setText('');
-    }
+    loadBodyIntoQuill(q, body);
 }
 
 function getKbBody(which) {
@@ -3485,9 +3483,14 @@ const SANITIZE_CONFIG = {
                    'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'mark', 'sub', 'sup',
                    'ul', 'ol', 'li',
                    'a', 'blockquote', 'pre', 'code',
-                   'table', 'thead', 'tbody', 'tr', 'th', 'td',
-                   'img', 'hr'],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel', 'colspan', 'rowspan', 'class'],
+                   'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
+                   'img', 'hr', 'figure', 'figcaption'],
+    // `style` is allowed so Quill's color/background spans survive
+    // (Quill uses inline `style="color: rgb(...)"`). DOMPurify has a CSS
+    // sanitizer that filters dangerous properties (expression, url(...js),
+    // position:fixed, etc.), so this is safe for a personal site.
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel', 'colspan', 'rowspan',
+                   'class', 'style', 'data-row', 'data-cell', 'width', 'height'],
     ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
     ADD_ATTR: ['target'],
 };
@@ -3518,8 +3521,86 @@ function renderBody(body) {
     return renderRichText(body);
 }
 
+// Cheap heuristic: does this string look like markdown (bold, lists, pipe
+// tables, headings)? Used when loading existing entries into Quill so the
+// user sees formatted output instead of literal `**bold**`.
+function looksLikeMarkdown(s) {
+    if (!s) return false;
+    return /(?:^|\n)\s*(?:\*\*[^*]|[-*]\s+|\d+[.)]\s+|#{1,6}\s+|\|.*\|)/.test(s);
+}
+
+// Convert markdown-ish body text to HTML for Quill ingestion. Reuses the
+// existing display renderers (markdownTableToHtml, renderRichBlock) so the
+// editor view matches the read view.
+function markdownBodyToHtml(text) {
+    if (!text) return '';
+    const blocks = text.split(/\n{2,}/);
+    const out = [];
+    for (const block of blocks) {
+        const t = markdownTableToHtml(block);
+        if (t) { out.push(t); continue; }
+        const b = renderRichBlock(block);
+        if (b) out.push(b);
+    }
+    return out.join('');
+}
+
+// Load a body string into a Quill instance. Routes HTML / markdown / plain
+// text through the right path so the user always sees formatted output.
+function loadBodyIntoQuill(quill, body) {
+    if (!quill) return;
+    if (!body) { quill.setText(''); return; }
+    let html = '';
+    if (looksLikeHtml(body)) html = sanitizeHtml(body);
+    else if (looksLikeMarkdown(body)) html = sanitizeHtml(markdownBodyToHtml(body));
+    else { quill.setText(body); return; }
+    quill.root.innerHTML = html;
+}
+
+// ----- Custom Quill blot: preserve pasted tables ----------------------
+// Quill 2 core strips <table> on paste because its Delta format has no
+// native table representation. We register a BlockEmbed that holds raw
+// table HTML so tables pasted from MKSAP/UpToDate survive. Tables are
+// rendered but not editable inside Quill — you can delete them but not
+// edit cells. (Trade-off vs. pulling in a table-editor library that
+// doesn't yet support Quill 2 cleanly.)
+function registerQuillExtensions() {
+    if (typeof Quill === 'undefined') return;
+    if (Quill._ecrefRegistered) return;
+    Quill._ecrefRegistered = true;
+
+    const BlockEmbed = Quill.import('blots/block/embed');
+    class TableHtmlBlot extends BlockEmbed {
+        static create(value) {
+            const node = super.create();
+            node.innerHTML = String(value || '');
+            node.setAttribute('contenteditable', 'false');
+            return node;
+        }
+        static value(node) {
+            const t = node.querySelector('table');
+            return t ? t.outerHTML : node.innerHTML;
+        }
+    }
+    TableHtmlBlot.blotName = 'table-html';
+    TableHtmlBlot.tagName = 'div';
+    TableHtmlBlot.className = 'ql-table-static';
+    Quill.register(TableHtmlBlot, true);
+}
+
+// Shared clipboard matchers for both KB + Reference Quill instances.
+// Captures <table> elements as table-html blots so paste preserves them.
+function quillClipboardMatchers() {
+    if (typeof Quill === 'undefined') return [];
+    const Delta = Quill.import('delta');
+    return [
+        ['TABLE', (node) => new Delta().insert({ 'table-html': node.outerHTML })],
+    ];
+}
+
 function getRefItemQuill() {
     if (_refItemQuill || typeof Quill === 'undefined') return _refItemQuill;
+    registerQuillExtensions();
     _refItemQuill = new Quill('#refItemBody', {
         theme: 'snow',
         placeholder: 'Notes, summary, key teaching points... paste from MKSAP/UpToDate to preserve formatting.',
@@ -3534,7 +3615,7 @@ function getRefItemQuill() {
                 ['clean'],
             ],
             clipboard: {
-                // Quill's default already strips scripts; we sanitize again on save.
+                matchers: quillClipboardMatchers(),
             },
         },
     });
@@ -3549,13 +3630,7 @@ function setRefItemBody(body) {
         if (el) el.textContent = body || '';
         return;
     }
-    if (looksLikeHtml(body)) {
-        q.root.innerHTML = sanitizeHtml(body);
-    } else if (body) {
-        q.setText(body);
-    } else {
-        q.setText('');
-    }
+    loadBodyIntoQuill(q, body);
 }
 
 function getRefItemBody() {
