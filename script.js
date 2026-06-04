@@ -367,6 +367,15 @@ function renderRichBlock(block) {
             return `<h${level}>${formatInline(m[2])}</h${level}>`;
         }
     }
+    // Blockquote: every non-blank line starts with "> "
+    const isQuote = lines.every(l => !l.trim() || /^\s*>\s?/.test(l));
+    if (isQuote && lines.some(l => /^\s*>\s?/.test(l))) {
+        const inner = lines
+            .filter(l => l.trim())
+            .map(l => formatInline(l.replace(/^\s*>\s?/, '')))
+            .join('<br>');
+        return `<blockquote>${inner}</blockquote>`;
+    }
     // Bullet list: every non-blank line starts with "- " or "* "
     const isBullet = lines.every(l => !l.trim() || /^\s*[-*]\s+/.test(l));
     // Numbered list: every non-blank line starts with "N." or "N)"
@@ -3536,11 +3545,11 @@ function renderBody(body) {
 }
 
 // Cheap heuristic: does this string look like markdown (bold, lists, pipe
-// tables, headings)? Used when loading existing entries into Quill so the
-// user sees formatted output instead of literal `**bold**`.
+// tables, headings, blockquotes)? Used when loading existing entries into
+// Quill so the user sees formatted output instead of literal `**bold**`.
 function looksLikeMarkdown(s) {
     if (!s) return false;
-    return /(?:^|\n)\s*(?:\*\*[^*]|[-*]\s+|\d+[.)]\s+|#{1,6}\s+|\|.*\|)/.test(s);
+    return /(?:^|\n)\s*(?:\*\*[^*]|[-*]\s+|\d+[.)]\s+|#{1,6}\s+|>\s+|\|.*\|)/.test(s);
 }
 
 // Convert markdown-ish body text to HTML for Quill ingestion. Reuses the
