@@ -1869,7 +1869,7 @@ function getKbQuill(which) {
             : 'Workup, orders, assessment template... rich text supported. Raw markdown gets auto-converted.',
         modules: {
             toolbar: [
-                [{ header: [1, 2, 3, false] }],
+                [{ header: [1, 2, 3, 4, false] }],
                 ['bold', 'italic', 'underline', 'strike'],
                 [{ list: 'ordered' }, { list: 'bullet' }],
                 ['blockquote', 'code-block'],
@@ -3671,7 +3671,7 @@ function getRefItemQuill() {
         placeholder: 'Notes, summary, key teaching points... paste from MKSAP/UpToDate to preserve formatting.',
         modules: {
             toolbar: [
-                [{ header: [1, 2, 3, false] }],
+                [{ header: [1, 2, 3, 4, false] }],
                 ['bold', 'italic', 'underline', 'strike'],
                 [{ list: 'ordered' }, { list: 'bullet' }],
                 ['blockquote', 'code-block'],
