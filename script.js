@@ -358,6 +358,15 @@ function renderRichText(text) {
 function renderRichBlock(block) {
     const lines = block.split('\n');
     if (!lines.length) return '';
+    // ATX heading: `# Title` ... `###### Title` (single-line block only)
+    if (lines.length === 1) {
+        const m = lines[0].match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (m) {
+            // Map `#` → h2, `##` → h3, ... cap at h6. (Avoid h1 — too big in cards.)
+            const level = Math.min(m[1].length + 1, 6);
+            return `<h${level}>${formatInline(m[2])}</h${level}>`;
+        }
+    }
     // Bullet list: every non-blank line starts with "- " or "* "
     const isBullet = lines.every(l => !l.trim() || /^\s*[-*]\s+/.test(l));
     // Numbered list: every non-blank line starts with "N." or "N)"
@@ -381,13 +390,17 @@ function renderRichBlock(block) {
     return `<p class="kb-para">${lines.map(formatInline).join('<br>')}</p>`;
 }
 
-// Inline-only formatting: escape, link URLs, bold (**), italic (*).
+// Inline-only formatting: escape, link URLs, bold (**), italic (*), `code`.
 function formatInline(text) {
     let out = escapeHtml(text);
     // URLs
     out = out.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-    // Bold: **text**
+    // Bold first so the bold delimiters get consumed before italic runs.
     out = out.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // Italic: *text* — guard against matching part of remaining ** sequences.
+    out = out.replace(/(^|[^*\w])\*([^*\n]+?)\*(?!\w|\*)/g, '$1<em>$2</em>');
+    // Inline code: `code`
+    out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>');
     return out;
 }
 
@@ -1852,8 +1865,8 @@ function getKbQuill(which) {
     _kbQuill[which] = new Quill(id, {
         theme: 'snow',
         placeholder: which === 'data'
-            ? 'Clinical details, differential, key findings... paste from UpToDate/MKSAP to keep formatting.'
-            : 'Workup, orders, assessment template... rich text supported.',
+            ? 'Clinical details, differential, key findings... paste from UpToDate/MKSAP to keep formatting. Raw markdown gets auto-converted.'
+            : 'Workup, orders, assessment template... rich text supported. Raw markdown gets auto-converted.',
         modules: {
             toolbar: [
                 [{ header: [1, 2, 3, false] }],
@@ -1869,6 +1882,7 @@ function getKbQuill(which) {
             },
         },
     });
+    attachMarkdownPaste(_kbQuill[which]);
     return _kbQuill[which];
 }
 
@@ -3532,9 +3546,14 @@ function looksLikeMarkdown(s) {
 // Convert markdown-ish body text to HTML for Quill ingestion. Reuses the
 // existing display renderers (markdownTableToHtml, renderRichBlock) so the
 // editor view matches the read view.
+//
+// Pre-step: pasted markdown often has BLANK LINES between table rows
+// (especially when copied out of chat output). Collapse those so the
+// whole table reaches markdownTableToHtml in one piece.
 function markdownBodyToHtml(text) {
     if (!text) return '';
-    const blocks = text.split(/\n{2,}/);
+    const cleaned = collapseBlanksBetweenTableRows(text);
+    const blocks = cleaned.split(/\n{2,}/);
     const out = [];
     for (const block of blocks) {
         const t = markdownTableToHtml(block);
@@ -3543,6 +3562,26 @@ function markdownBodyToHtml(text) {
         if (b) out.push(b);
     }
     return out.join('');
+}
+
+function collapseBlanksBetweenTableRows(text) {
+    const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+    const lines = text.split('\n');
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+        const cur = lines[i];
+        if (cur.trim() === '' && out.length > 0 && isTableRow(out[out.length - 1])) {
+            // Look ahead through any run of blanks for the next non-blank line.
+            let j = i + 1;
+            while (j < lines.length && lines[j].trim() === '') j++;
+            if (j < lines.length && isTableRow(lines[j])) {
+                // Skip the blank — keep table rows contiguous.
+                continue;
+            }
+        }
+        out.push(cur);
+    }
+    return out.join('\n');
 }
 
 // Load a body string into a Quill instance. Routes HTML / markdown / plain
@@ -3598,6 +3637,32 @@ function quillClipboardMatchers() {
     ];
 }
 
+// Attach a paste listener that auto-converts pasted plain-text markdown
+// (raw `# headings`, `| pipe | tables |`, `**bold**`, `- bullets`, etc.)
+// to HTML before Quill ingests it. Only triggers on text-only pastes —
+// pastes from a webpage carry an HTML payload, and we let Quill handle
+// those normally so source formatting wins.
+function attachMarkdownPaste(quill) {
+    if (!quill || quill._ecrefMdPaste) return;
+    quill._ecrefMdPaste = true;
+    quill.root.addEventListener('paste', (e) => {
+        const cd = e.clipboardData;
+        if (!cd) return;
+        const html = cd.getData('text/html');
+        const text = cd.getData('text/plain');
+        // Skip if clipboard already has HTML — source formatting beats our guess.
+        if (html) return;
+        if (!text || !looksLikeMarkdown(text)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const converted = sanitizeHtml(markdownBodyToHtml(text));
+        if (!converted) return;
+        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+        if (range.length) quill.deleteText(range.index, range.length, 'user');
+        quill.clipboard.dangerouslyPasteHTML(range.index, converted, 'user');
+    }, true);  // capture phase — get there before Quill's own paste handler
+}
+
 function getRefItemQuill() {
     if (_refItemQuill || typeof Quill === 'undefined') return _refItemQuill;
     registerQuillExtensions();
@@ -3619,6 +3684,7 @@ function getRefItemQuill() {
             },
         },
     });
+    attachMarkdownPaste(_refItemQuill);
     return _refItemQuill;
 }
 
