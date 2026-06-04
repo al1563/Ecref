@@ -13,6 +13,8 @@ const SECTIONS = {
     'uw-toc-overrides':   { writeAuth: 'EDITOR_PASSWORD' },
     'usmle-toc-overrides':{ writeAuth: 'EDITOR_PASSWORD' },
     'dot-phrases':        { writeAuth: 'EDITOR_PASSWORD' },
+    'core-im':            { writeAuth: 'EDITOR_PASSWORD' },
+    'board-review':       { writeAuth: 'MKSAP_PASSWORD'  },
     'mksap':              { writeAuth: 'MKSAP_PASSWORD'  },
 };
 

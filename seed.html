@@ -76,8 +76,10 @@
 <div class="actions" style="margin-top:0.8rem;">
   <button id="seedDotPhrasesBtn">Seed dot phrases (~84 entries)</button>
   <button id="seedAntibiogramBtn">Seed UCI Antibiogram (2-page sample)</button>
-  <button id="seedEbmBtn">Seed EBM articles (~630 trials)</button>
+  <button id="seedEbmBtn">Seed EBM articles (~636 trials)</button>
+  <button id="seedCoreImBtn">Seed CoreIM podcast (~248 episodes)</button>
   <button id="seedMksapBtn">Seed MKSAP Topics (~191 chapters)</button>
+  <button id="seedBoardReviewBtn">Seed Board Review Facts (~1560 cards)</button>
 </div>
 <div id="seedExtraStatus"></div>
 
@@ -298,6 +300,52 @@ $('seedEbmBtn').addEventListener('click', async () => {
   } catch (e) {
     const s = $('seedExtraStatus');
     s.className = 'err'; s.textContent = `EBM seed failed: ${e.message}`;
+  }
+});
+
+$('seedCoreImBtn').addEventListener('click', async () => {
+  const btn = $('seedCoreImBtn');
+  try {
+    const fr = await fetch('coreim-seed.json', { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`coreim-seed.json: HTTP ${fr.status}`);
+    const items = await fr.json();
+    if (!confirm(`Replace CoreIM podcast with ${items.length} episodes? Existing items will be lost.`)) return;
+    await seedListSection('core-im', items, btn, 'CoreIM podcast');
+  } catch (e) {
+    const s = $('seedExtraStatus');
+    s.className = 'err'; s.textContent = `CoreIM seed failed: ${e.message}`;
+  }
+});
+
+$('seedBoardReviewBtn').addEventListener('click', async () => {
+  const s = $('seedExtraStatus');
+  s.className = ''; s.textContent = '';
+  const pw = prompt('Enter MKSAP password (board review uses the same gate):');
+  if (!pw) return;
+  const btn = $('seedBoardReviewBtn');
+  btn.disabled = true; const orig = btn.textContent;
+  btn.textContent = 'Loading seed JSON...';
+  try {
+    const fr = await fetch('board-review-seed.json', { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`board-review-seed.json: HTTP ${fr.status}`);
+    const items = await fr.json();
+    if (!confirm(`Replace Board Review Facts with ${items.length} cards? Existing items will be lost.`)) {
+      btn.disabled = false; btn.textContent = orig; return;
+    }
+    btn.textContent = 'Seeding...';
+    const r = await fetch('/api/seed-list-mksap', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ section: 'board-review', items }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    s.className = 'ok';
+    s.textContent = `✓ Board Review: seeded ${j.count} cards.`;
+  } catch (e) {
+    s.className = 'err'; s.textContent = `Board Review seed failed: ${e.message}`;
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
   }
 });
 

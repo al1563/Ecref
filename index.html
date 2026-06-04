@@ -19,7 +19,7 @@
                 <small class="opacity-75">UCI Medical Center - Clinical Guidelines & Database</small>
             </div>
             <div>
-                <span class="badge bg-light text-dark">v2026.9</span>
+                <span class="badge bg-light text-dark">v2026.10</span>
             </div>
         </div>
     </div>
@@ -195,12 +195,13 @@
                         </div>
                         <div class="col-12">
                             <label class="form-label">Reference / clinical notes</label>
-                            <textarea id="entryData" class="form-control entry-textarea" rows="10" placeholder="Clinical details, differential, key findings..."></textarea>
-                            <small class="text-muted">Markdown tables (pipe-separated) auto-render. Title (first non-empty line) is added automatically.</small>
+                            <div id="entryData" class="entry-quill"></div>
+                            <small class="text-muted">Rich text: bold, italics, color, lists, tables. Paste from MKSAP/UpToDate to keep formatting. Plain-text entries open as-is.</small>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Template / order set</label>
-                            <textarea id="entryTemplate" class="form-control entry-textarea" rows="8" placeholder="Workup, orders, assessment template..."></textarea>
+                            <div id="entryTemplate" class="entry-quill entry-quill-template"></div>
+                            <small class="text-muted">Same rich-text editor — useful for formatted order sets and templates.</small>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Images</label>

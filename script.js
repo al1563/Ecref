@@ -419,6 +419,9 @@ function markdownTableToHtml(markdown) {
 
 function renderCellContent(data) {
     if (!data) return '';
+    // If the content was authored in the Quill editor it's already HTML.
+    // Sanitize and render directly so bold/italic/lists/colors survive.
+    if (looksLikeHtml(data)) return sanitizeHtml(data);
     const tableHtml = markdownTableToHtml(data);
     if (tableHtml) return tableHtml;
     return renderRichText(data);
@@ -1837,6 +1840,61 @@ function wireEntryEditor() {
     });
 }
 
+// ----- KB entry Quill instances (data + template) -----------------------
+// Initialized lazily the first time the entry modal opens. Each Quill
+// shares the same SANITIZE_CONFIG as the Reference editor.
+const _kbQuill = { data: null, template: null };
+
+function getKbQuill(which) {
+    if (_kbQuill[which] || typeof Quill === 'undefined') return _kbQuill[which];
+    const id = which === 'data' ? '#entryData' : '#entryTemplate';
+    _kbQuill[which] = new Quill(id, {
+        theme: 'snow',
+        placeholder: which === 'data'
+            ? 'Clinical details, differential, key findings... paste from UpToDate/MKSAP to keep formatting.'
+            : 'Workup, orders, assessment template... rich text supported.',
+        modules: {
+            toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                ['blockquote', 'code-block'],
+                ['link'],
+                [{ color: [] }, { background: [] }],
+                ['clean'],
+            ],
+        },
+    });
+    return _kbQuill[which];
+}
+
+function setKbBody(which, body) {
+    const q = getKbQuill(which);
+    if (!q) {
+        const el = document.getElementById(which === 'data' ? 'entryData' : 'entryTemplate');
+        if (el) el.textContent = body || '';
+        return;
+    }
+    if (looksLikeHtml(body)) {
+        q.root.innerHTML = sanitizeHtml(body);
+    } else if (body) {
+        q.setText(body);
+    } else {
+        q.setText('');
+    }
+}
+
+function getKbBody(which) {
+    const q = getKbQuill(which);
+    if (!q) {
+        const el = document.getElementById(which === 'data' ? 'entryData' : 'entryTemplate');
+        return el ? el.textContent : '';
+    }
+    const raw = (q.getSemanticHTML && q.getSemanticHTML()) || q.root.innerHTML;
+    if (/^\s*(<p>(<br>)?<\/p>\s*)+$/i.test(raw)) return '';
+    return sanitizeHtml(raw);
+}
+
 function openEntryEditor(id) {
     requireEditor(() => {
         EDITOR_STATE.editingId = id;
@@ -1856,20 +1914,21 @@ function openEntryEditor(id) {
             EDITOR_STATE.tags = [...(entry.tags || [])];
             EDITOR_STATE.links = (entry.links || []).map(l => ({ ...l }));
             EDITOR_STATE.images = (entry.imgs || '').split(',').map(s => s.trim()).filter(Boolean);
-            // Strip title from data (we re-add it on save)
+            // Strip title from data (we re-add it on save). For HTML bodies the
+            // saved format is "title\n<html>..." — same split logic works.
             const dataLines = (entry.data || '').split('\n');
             const titleLine = dataLines.findIndex(l => l.trim().replace(/^#+\s*/, ''));
             const bodyLines = titleLine >= 0 ? dataLines.slice(titleLine + 1) : dataLines;
-            document.getElementById('entryData').value = bodyLines.join('\n').replace(/^\n+/, '');
-            document.getElementById('entryTemplate').value = entry.template || '';
+            setKbBody('data', bodyLines.join('\n').replace(/^\n+/, ''));
+            setKbBody('template', entry.template || '');
         } else {
             document.getElementById('entryTitle').value = '';
             document.getElementById('entryCategory').value = KB_STATE.category || 'Other';
             EDITOR_STATE.tags = [];
             EDITOR_STATE.links = [];
             EDITOR_STATE.images = [];
-            document.getElementById('entryData').value = '';
-            document.getElementById('entryTemplate').value = '';
+            setKbBody('data', '');
+            setKbBody('template', '');
         }
         document.getElementById('entryTagInput').value = '';
         renderEditorTags();
@@ -2021,8 +2080,8 @@ function buildEntryFromForm() {
     if (EDITOR_STATE.images.some(p => p.startsWith('uploading:'))) {
         throw new Error('Wait for image uploads to finish before saving.');
     }
-    const dataBody = document.getElementById('entryData').value.trim();
-    const template = document.getElementById('entryTemplate').value;
+    const dataBody = getKbBody('data');
+    const template = getKbBody('template');
     const category = document.getElementById('entryCategory').value || 'Other';
     const cleanLinks = EDITOR_STATE.links.filter(l => l.label?.trim() || l.url?.trim());
     const data = dataBody ? `${title}\n${dataBody}` : title;
@@ -2384,6 +2443,9 @@ const REFERENCE_TOC = [
     { id: 'ebm', title: 'EBM articles', icon: 'fa-flask', type: 'list',
       section: 'ebm', dailyPick: true,
       subtitle: 'Landmark trials and evidence-based reference articles. One pick surfaces daily.' },
+    { id: 'core-im', title: 'CoreIM podcast', icon: 'fa-podcast', type: 'list',
+      section: 'core-im', dailyPick: true,
+      subtitle: 'Core IM podcast archive — 5 Pearls, Hoofbeats, Bytes, At The Bedside. One surfaces daily.' },
     { id: 'g-uworld', title: 'UWorld', icon: 'fa-graduation-cap', gated: 'mksap', items: [
         { id: 'uw-flowsheets', title: 'Flow Sheet Tables', icon: 'fa-table-list',
           type: 'pdf-toc',
@@ -2399,6 +2461,10 @@ const REFERENCE_TOC = [
           type: 'list',
           section: 'uw', dailyPick: true,
           subtitle: 'Personal learning cards — notes, mnemonics, key teaching points. One surfaces daily.' },
+        { id: 'board-review', title: 'Board Review Facts', icon: 'fa-clipboard-check',
+          type: 'list',
+          section: 'board-review', dailyPick: true,
+          subtitle: 'High-yield boards review facts, grouped by subspecialty. One surfaces daily.' },
     ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap-content',
       dailyPick: true,
@@ -2711,33 +2777,66 @@ async function renderAntibiogram(node) {
     wireListActions(viewer, node.section);
 }
 
-// ----- Generic editable list (EBM, UW, abx-extras) -----
+// ----- Generic editable list (EBM, UW, abx-extras, core-im, board-review) -----
+// Some sections (e.g. board-review) sit under an mksap-gated parent group and
+// require the MKSAP password for both reads and writes. We detect that via the
+// parent's `gated` flag.
 async function renderListSection(node) {
     const viewer = refViewer();
     viewer.innerHTML = `<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin"></i> Loading ${escapeHtml(node.title)}...</div>`;
 
+    const parent = refFindParentGroup(node.id);
+    const isMksapGated = parent && parent.gated === 'mksap';
+    const fetchPw = isMksapGated ? REFERENCE_STATE.mksapPassword : null;
+
     let items;
     try {
-        items = await fetchListSection(node.section);
+        items = await fetchListSection(node.section, fetchPw);
     } catch (e) {
         viewer.innerHTML = `<div class="alert alert-warning">Couldn't load ${escapeHtml(node.title)}: ${escapeHtml(e.message)}</div>`;
         return;
     }
     REFERENCE_STATE.lists[node.section] = items;
 
+    // Render with the current filter applied (defaults to empty)
+    renderListSectionBody(node, items);
+}
+
+// Separated so the search box can re-render without re-fetching.
+function renderListSectionBody(node, items) {
+    const viewer = refViewer();
+    const parent = refFindParentGroup(node.id);
+    const isMksapGated = parent && parent.gated === 'mksap';
+
     // Sort newest first
     const sorted = items.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
-    const pickHtml = node.dailyPick && items.length
+    // Apply per-section search filter (in-memory). Stored on REFERENCE_STATE.
+    REFERENCE_STATE.listSearch = REFERENCE_STATE.listSearch || {};
+    const q = (REFERENCE_STATE.listSearch[node.section] || '').trim().toLowerCase();
+    const filtered = q
+        ? sorted.filter(i => {
+            const hay = [i.title, i.body, (i.tags || []).join(' '), i.category || '']
+                .join(' ').toLowerCase();
+            // strip basic HTML tags from body
+            return hay.replace(/<[^>]+>/g, ' ').includes(q);
+        })
+        : sorted;
+
+    const pickHtml = node.dailyPick && items.length && !q
         ? renderDailyPickHtml(items, node.title)
         : '';
 
-    const listHtml = sorted.length
-        ? sorted.map(i => renderListItemHtml(i, node.section)).join('')
+    const canEdit = isMksapGated ? REFERENCE_STATE.mksapUnlocked : editorReadyHtml();
+
+    const listHtml = filtered.length
+        ? filtered.map(i => renderListItemHtml(i, node.section)).join('')
         : `<div class="reference-list-empty">
             <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-            <p class="mb-0">No items yet.${editorReadyHtml() ? ' Click <strong>Add</strong> above to create one.' : ''}</p>
+            <p class="mb-0">${q ? 'No matches.' : `No items yet.${canEdit ? ' Click <strong>Add</strong> above to create one.' : ''}`}</p>
         </div>`;
+
+    const showSearch = node.searchable !== false && items.length > 5;
 
     viewer.innerHTML = `
         <div class="reference-list-header">
@@ -2746,20 +2845,45 @@ async function renderListSection(node) {
                 ${node.subtitle ? `<small class="text-muted">${escapeHtml(node.subtitle)}</small>` : ''}
             </div>
             <div>
-                <span class="text-muted small me-2">${items.length} item${items.length === 1 ? '' : 's'}</span>
-                ${editorReadyHtml() ? `<button class="btn btn-sm btn-primary" data-ref-add="${escapeHtml(node.section)}">
+                <span class="text-muted small me-2">${q ? `${filtered.length} of ${items.length}` : `${items.length} item${items.length === 1 ? '' : 's'}`}</span>
+                ${canEdit ? `<button class="btn btn-sm btn-primary" data-ref-add="${escapeHtml(node.section)}">
                     <i class="fas fa-plus me-1"></i>Add
                 </button>` : ''}
             </div>
         </div>
+        ${showSearch ? `<div class="reference-list-search mb-3">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input type="search" class="form-control" id="refListSearch-${escapeHtml(node.section)}"
+                       placeholder="Search ${escapeHtml(node.title.toLowerCase())}..."
+                       value="${escapeHtml(REFERENCE_STATE.listSearch[node.section] || '')}">
+            </div>
+        </div>` : ''}
         ${pickHtml}
         <div class="reference-list">${listHtml}</div>
     `;
 
-    if (!editorReadyHtml()) {
+    if (!canEdit && !isMksapGated) {
         refActions().innerHTML = `<span class="text-muted small">${unconfiguredEditorMsg()}</span>`;
     } else {
         refActions().innerHTML = '';
+    }
+
+    if (showSearch) {
+        const inp = document.getElementById(`refListSearch-${node.section}`);
+        if (inp) {
+            inp.addEventListener('input', e => {
+                REFERENCE_STATE.listSearch[node.section] = e.target.value;
+                renderListSectionBody(node, items);
+                // Restore focus + caret to the search input after re-render
+                const newInp = document.getElementById(`refListSearch-${node.section}`);
+                if (newInp) {
+                    newInp.focus();
+                    const v = newInp.value;
+                    newInp.value = ''; newInp.value = v;
+                }
+            });
+        }
     }
 
     viewer.querySelectorAll('img').forEach(im => im.addEventListener('click', e => openImageModal(e.target.src)));
@@ -3228,6 +3352,12 @@ function urlDomain(url) {
     catch (e) { return ''; }
 }
 
+// Sections whose writes (and, for some, reads) are gated by MKSAP_PASSWORD
+// rather than the regular EDITOR_PASSWORD.
+function sectionUsesMksap(section) {
+    return section === 'mksap' || section === 'board-review';
+}
+
 function renderListItemHtml(item, section) {
     const titleHtml = item.url
         ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.title || '(no title)')}<i class="fas fa-external-link-alt reference-list-item-extlink" aria-hidden="true"></i></a>`
@@ -3250,7 +3380,7 @@ function renderListItemHtml(item, section) {
     return `<div class="reference-list-item" data-ref-item-id="${escapeHtml(item.id)}">
         <div class="reference-list-item-head">
             <div class="reference-list-item-title">${titleHtml}</div>
-            ${editorReadyHtml() || section === 'mksap' ? `<div class="reference-list-item-actions">
+            ${editorReadyHtml() || sectionUsesMksap(section) ? `<div class="reference-list-item-actions">
                 <button class="btn btn-outline-secondary" data-ref-edit="${escapeHtml(section)}/${escapeHtml(item.id)}" title="Edit"><i class="fas fa-edit"></i></button>
                 <button class="btn btn-outline-danger" data-ref-delete="${escapeHtml(section)}/${escapeHtml(item.id)}" title="Delete"><i class="fas fa-trash"></i></button>
             </div>` : ''}
@@ -3317,7 +3447,7 @@ async function fetchListSection(section, bearer = null) {
 // requireEditor(); MKSAP uses its own gate and is already unlocked by the
 // time these buttons render.
 function wireListActions(viewer, section) {
-    const guard = section === 'mksap' ? (fn) => fn() : requireEditor;
+    const guard = sectionUsesMksap(section) ? (fn) => fn() : requireEditor;
     viewer.querySelectorAll('[data-ref-add]').forEach(el => {
         el.addEventListener('click', () => guard(() => openRefItemModal(el.dataset.refAdd, null)));
     });
@@ -3539,7 +3669,8 @@ function openRefItemModal(section, item) {
 
 function sectionPrettyName(s) {
     return { ebm: 'EBM articles', uw: 'UW Learning Cards', 'abx-extras': 'Antibiotics extras',
-             'uci-antibiogram': 'UCI Antibiogram', mksap: 'MKSAP Boards Basics' }[s] || s;
+             'uci-antibiogram': 'UCI Antibiogram', mksap: 'MKSAP Boards Basics',
+             'core-im': 'CoreIM podcast', 'board-review': 'Board Review Facts' }[s] || s;
 }
 
 async function uploadRefItemImage(file) {
@@ -3547,11 +3678,11 @@ async function uploadRefItemImage(file) {
         toast('Only image files are supported here.', 'error');
         return;
     }
-    if (!editorReadyHtml() && REFERENCE_STATE.refItemSection !== 'mksap') {
+    if (!editorReadyHtml() && !sectionUsesMksap(REFERENCE_STATE.refItemSection)) {
         toast('Editor not unlocked.', 'error');
         return;
     }
-    const password = REFERENCE_STATE.refItemSection === 'mksap'
+    const password = sectionUsesMksap(REFERENCE_STATE.refItemSection)
         ? REFERENCE_STATE.mksapPassword
         : EDITOR_STATE.apiPassword;
     const placeholderToast = toast('Uploading image...', 'info', { duration: 0 });
@@ -3583,7 +3714,7 @@ async function saveRefItem() {
     const title = document.getElementById('refItemTitle').value.trim();
     if (!title) { toast('Title is required.', 'error'); return; }
 
-    const password = section === 'mksap' ? REFERENCE_STATE.mksapPassword : EDITOR_STATE.apiPassword;
+    const password = sectionUsesMksap(section) ? REFERENCE_STATE.mksapPassword : EDITOR_STATE.apiPassword;
     if (!password) { toast('Editor not unlocked.', 'error'); return; }
 
     const now = new Date().toISOString();
@@ -3639,7 +3770,7 @@ async function deleteRefItem(section, id) {
     const item = (REFERENCE_STATE.lists[section] || []).find(i => i.id === id);
     if (!item) return;
     if (!confirm(`Delete "${item.title}"?`)) return;
-    const password = section === 'mksap' ? REFERENCE_STATE.mksapPassword : EDITOR_STATE.apiPassword;
+    const password = sectionUsesMksap(section) ? REFERENCE_STATE.mksapPassword : EDITOR_STATE.apiPassword;
     if (!password) { toast('Editor not unlocked.', 'error'); return; }
     try {
         const r = await fetch(`/api/list/${encodeURIComponent(section)}/${encodeURIComponent(id)}`, {

@@ -1,17 +1,14 @@
-// /api/seed-list  — bulk-set a list section (replaces existing contents).
-// Body: { section: "dot-phrases", items: [...] }
-// Auth: Bearer EDITOR_PASSWORD
+// /api/seed-list-mksap  — bulk-set a list section gated by MKSAP_PASSWORD.
+// Body: { section: "board-review", items: [...] }
+// Auth: Bearer MKSAP_PASSWORD
+//
+// Sibling to /api/seed-list (EDITOR_PASSWORD) — kept separate so the two
+// auth scopes don't have to share an endpoint.
 
 import { setList, isKvConfigured } from '../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../lib/auth.js';
 
-const ALLOWED = new Set([
-    'ebm', 'uw', 'abx-extras', 'uci-antibiogram',
-    'uw-toc-overrides', 'usmle-toc-overrides', 'dot-phrases',
-    'core-im',
-    // mksap and board-review intentionally NOT here — they use MKSAP_PASSWORD.
-    // Seed those via /api/seed-list-mksap.
-]);
+const ALLOWED = new Set(['board-review']);
 
 export const config = {
     api: { bodyParser: { sizeLimit: '4mb' } },
@@ -25,7 +22,7 @@ export default async function handler(req, res) {
     if (!isKvConfigured()) {
         return res.status(503).json({ error: 'KV not configured on this deployment' });
     }
-    const auth = checkAuth(req);
+    const auth = checkAuth(req, 'MKSAP_PASSWORD');
     if (!auth.ok) return sendUnauthorized(res, auth.reason);
 
     const { section, items } = req.body || {};
@@ -40,7 +37,7 @@ export default async function handler(req, res) {
         await setList(section, items);
         return res.status(200).json({ ok: true, section, count: items.length });
     } catch (e) {
-        console.error('api/seed-list error:', e);
+        console.error('api/seed-list-mksap error:', e);
         return res.status(500).json({ error: e.message || 'Server error' });
     }
 }
