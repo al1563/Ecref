@@ -19,7 +19,7 @@
                 <small class="opacity-75">UCI Medical Center - Clinical Guidelines & Database</small>
             </div>
             <div>
-                <span class="badge bg-light text-dark">v2026.15</span>
+                <span class="badge bg-light text-dark">v2026.16</span>
             </div>
         </div>
     </div>
@@ -194,12 +194,24 @@
                             <input type="text" id="entryTagInput" class="form-control mt-1" placeholder="Type a tag and press Enter">
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Reference / clinical notes</label>
+                            <div class="d-flex justify-content-between align-items-end mb-1">
+                                <label class="form-label mb-0">Reference / clinical notes</label>
+                                <button type="button" class="btn btn-sm btn-outline-secondary md-paste-btn"
+                                        data-md-target="entryData" title="Convert markdown text to formatted rich text">
+                                    <i class="fab fa-markdown me-1"></i>Paste markdown
+                                </button>
+                            </div>
                             <div id="entryData" class="entry-quill"></div>
                             <small class="text-muted">Rich text: bold, italics, color, lists, tables. Paste from MKSAP/UpToDate to keep formatting. Plain-text entries open as-is.</small>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Template / order set</label>
+                            <div class="d-flex justify-content-between align-items-end mb-1">
+                                <label class="form-label mb-0">Template / order set</label>
+                                <button type="button" class="btn btn-sm btn-outline-secondary md-paste-btn"
+                                        data-md-target="entryTemplate" title="Convert markdown text to formatted rich text">
+                                    <i class="fab fa-markdown me-1"></i>Paste markdown
+                                </button>
+                            </div>
                             <div id="entryTemplate" class="entry-quill entry-quill-template"></div>
                             <small class="text-muted">Same rich-text editor — useful for formatted order sets and templates.</small>
                         </div>
@@ -827,7 +839,13 @@
                             <input type="url" id="refItemUrl" class="form-control" placeholder="https://...">
                         </div>
                         <div class="col-12">
-                            <label class="form-label" id="refItemBodyLabel">Notes / summary</label>
+                            <div class="d-flex justify-content-between align-items-end mb-1">
+                                <label class="form-label mb-0" id="refItemBodyLabel">Notes / summary</label>
+                                <button type="button" class="btn btn-sm btn-outline-secondary md-paste-btn"
+                                        data-md-target="refItemBody" title="Convert markdown text to formatted rich text">
+                                    <i class="fab fa-markdown me-1"></i>Paste markdown
+                                </button>
+                            </div>
                             <div id="refItemBody" class="ref-item-quill"></div>
                             <small class="text-muted">Rich text. Paste from MKSAP, UpToDate, Word — formatting is preserved (scripts + styles stripped on save).</small>
                         </div>
@@ -921,6 +939,35 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="changePwSubmit"><i class="fas fa-key me-1"></i>Update password</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Paste markdown — convert raw markdown to formatted rich text -->
+    <div class="modal fade" id="pasteMarkdownModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fab fa-markdown me-2"></i>Paste markdown</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2">Paste raw markdown on the left — headings, bullets, numbered lists, blockquotes, pipe tables, horizontal rules (<code>---</code>), bold/italic, links. The preview on the right shows what will be inserted into the editor.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small">Markdown</label>
+                            <textarea id="pasteMarkdownInput" class="form-control" rows="14" style="font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem;" placeholder="# Heading&#10;&#10;- Bullet&#10;- Another bullet&#10;&#10;| Col 1 | Col 2 |&#10;|-------|-------|&#10;| A     | B     |"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Preview</label>
+                            <div id="pasteMarkdownPreview" class="border rounded p-2 bg-light" style="min-height: 14em; max-height: 28em; overflow-y: auto; font-size: 0.9rem;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="pasteMarkdownInsert"><i class="fas fa-arrow-down me-1"></i>Insert into editor</button>
                 </div>
             </div>
         </div>

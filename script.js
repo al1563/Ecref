@@ -103,6 +103,9 @@ $(document).ready(function () {
 
     // Reference tab (Antibiotics + ConanLi + EBM + UW + MKSAP)
     initReference();
+
+    // "Paste markdown" modal — shared by both KB and Reference editors
+    initPasteMarkdownModal();
 });
 
 // =========================================================================
@@ -1874,8 +1877,8 @@ function getKbQuill(which) {
     _kbQuill[which] = new Quill(id, {
         theme: 'snow',
         placeholder: which === 'data'
-            ? 'Clinical details, differential, key findings... paste from UpToDate/MKSAP to keep formatting. Raw markdown gets auto-converted.'
-            : 'Workup, orders, assessment template... rich text supported. Raw markdown gets auto-converted.',
+            ? 'Clinical details, differential, key findings... paste from UpToDate/MKSAP to keep formatting. Use the "Paste markdown" button for raw markdown text.'
+            : 'Workup, orders, assessment template... rich text supported. Use the "Paste markdown" button for raw markdown text.',
         modules: {
             toolbar: [
                 [{ header: [1, 2, 3, 4, false] }],
@@ -1891,7 +1894,6 @@ function getKbQuill(which) {
             },
         },
     });
-    attachMarkdownPaste(_kbQuill[which]);
     return _kbQuill[which];
 }
 
@@ -3545,64 +3547,115 @@ function renderBody(body) {
 }
 
 // Cheap heuristic: does this string look like markdown (bold, lists, pipe
-// tables, headings, blockquotes)? Used when loading existing entries into
-// Quill so the user sees formatted output instead of literal `**bold**`.
+// tables, headings, blockquotes, horizontal rules)? Used when loading
+// existing entries into Quill so the user sees formatted output instead
+// of literal `**bold**`. NOT used at paste time anymore — paste uses the
+// explicit "Paste markdown" button.
 function looksLikeMarkdown(s) {
     if (!s) return false;
-    return /(?:^|\n)\s*(?:\*\*[^*]|[-*]\s+|\d+[.)]\s+|#{1,6}\s+|>\s+|\|.*\|)/.test(s);
+    return /(?:^|\n)\s*(?:\*\*[^*]|[-*]\s+|\d+[.)]\s+|#{1,6}\s+|>\s+|---+\s*$|\|.*\|)/.test(s);
 }
 
-// Convert markdown-ish body text to HTML for Quill ingestion. Reuses the
-// existing display renderers (markdownTableToHtml, renderRichBlock) so the
-// editor view matches the read view.
+// Convert markdown-ish body text to HTML.
 //
-// Pre-step: pasted markdown often has BLANK LINES between table rows
-// (especially when copied out of chat output). Collapse those so the
-// whole table reaches markdownTableToHtml in one piece.
+// Classify each line by kind (heading, hr, ul, ol, quote, table, prose,
+// blank), group consecutive same-kind lines into a "run", then emit each
+// run as one block. This means content like "Can cause:\n- A\n- B" (no
+// blank line) correctly splits into a <p> + a <ul>, instead of being
+// flattened into a paragraph with literal `- A`.
 function markdownBodyToHtml(text) {
     if (!text) return '';
-    const cleaned = collapseBlanksBetweenTableRows(text);
-    const blocks = cleaned.split(/\n{2,}/);
+    const lines = text.split('\n');
+    const runs = [];        // [{ kind, lines }]
+    let cur = null;
+
+    const flush = () => { if (cur && cur.lines.length) runs.push(cur); cur = null; };
+
+    for (const line of lines) {
+        const kind = classifyMdLine(line);
+        if (kind === 'blank') { flush(); continue; }
+        // Headings and HRs are always single-line standalone blocks.
+        if (kind === 'heading' || kind === 'hr') {
+            flush();
+            runs.push({ kind, lines: [line] });
+            continue;
+        }
+        if (cur && cur.kind === kind) {
+            cur.lines.push(line);
+        } else {
+            flush();
+            cur = { kind, lines: [line] };
+        }
+    }
+    flush();
+
     const out = [];
-    for (const block of blocks) {
-        const t = markdownTableToHtml(block);
-        if (t) { out.push(t); continue; }
-        const b = renderRichBlock(block);
-        if (b) out.push(b);
+    for (const run of runs) {
+        const html = renderMdRun(run);
+        if (html) out.push(html);
     }
     return out.join('');
 }
 
-function collapseBlanksBetweenTableRows(text) {
-    const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
-    const lines = text.split('\n');
-    const out = [];
-    for (let i = 0; i < lines.length; i++) {
-        const cur = lines[i];
-        if (cur.trim() === '' && out.length > 0 && isTableRow(out[out.length - 1])) {
-            // Look ahead through any run of blanks for the next non-blank line.
-            let j = i + 1;
-            while (j < lines.length && lines[j].trim() === '') j++;
-            if (j < lines.length && isTableRow(lines[j])) {
-                // Skip the blank — keep table rows contiguous.
-                continue;
-            }
+function classifyMdLine(line) {
+    if (line.trim() === '') return 'blank';
+    if (/^\s*#{1,6}\s+/.test(line)) return 'heading';
+    if (/^\s*(?:---+|\*\*\*+|___+)\s*$/.test(line)) return 'hr';
+    if (/^\s*\|.*\|\s*$/.test(line)) return 'table';
+    if (/^\s*>\s?/.test(line)) return 'quote';
+    if (/^\s*[-*+]\s+/.test(line)) return 'ul';
+    if (/^\s*\d+[.)]\s+/.test(line)) return 'ol';
+    return 'prose';
+}
+
+function renderMdRun({ kind, lines }) {
+    switch (kind) {
+        case 'heading': {
+            const m = lines[0].match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+            if (!m) return `<p>${formatInline(lines[0])}</p>`;
+            const level = Math.min(m[1].length + 1, 6);  // h2..h6
+            return `<h${level}>${formatInline(m[2])}</h${level}>`;
         }
-        out.push(cur);
+        case 'hr':
+            return '<hr>';
+        case 'table':
+            return markdownTableToHtml(lines.join('\n')) || '';
+        case 'quote': {
+            const inner = lines.map(l => formatInline(l.replace(/^\s*>\s?/, ''))).join('<br>');
+            return `<blockquote>${inner}</blockquote>`;
+        }
+        case 'ul': {
+            const items = lines.map(l => `<li>${formatInline(l.replace(/^\s*[-*+]\s+/, ''))}</li>`).join('');
+            return `<ul>${items}</ul>`;
+        }
+        case 'ol': {
+            const items = lines.map(l => `<li>${formatInline(l.replace(/^\s*\d+[.)]\s+/, ''))}</li>`).join('');
+            return `<ol>${items}</ol>`;
+        }
+        case 'prose':
+            return `<p>${lines.map(formatInline).join('<br>')}</p>`;
+        default:
+            return '';
     }
-    return out.join('\n');
 }
 
 // Load a body string into a Quill instance. Routes HTML / markdown / plain
 // text through the right path so the user always sees formatted output.
+//
+// CRITICAL: we MUST use `clipboard.dangerouslyPasteHTML` (not direct
+// `innerHTML = ...`) so Quill's internal Delta model syncs with the
+// visible DOM. Setting innerHTML alone paints the editor but leaves
+// Quill's state empty; the next keystroke or `getSemanticHTML()` then
+// silently drops the content.
 function loadBodyIntoQuill(quill, body) {
     if (!quill) return;
-    if (!body) { quill.setText(''); return; }
+    quill.setText('');
+    if (!body) return;
     let html = '';
     if (looksLikeHtml(body)) html = sanitizeHtml(body);
     else if (looksLikeMarkdown(body)) html = sanitizeHtml(markdownBodyToHtml(body));
     else { quill.setText(body); return; }
-    quill.root.innerHTML = html;
+    if (html) quill.clipboard.dangerouslyPasteHTML(0, html, 'silent');
 }
 
 // ----- Custom Quill blot: preserve pasted tables ----------------------
@@ -3646,30 +3699,72 @@ function quillClipboardMatchers() {
     ];
 }
 
-// Attach a paste listener that auto-converts pasted plain-text markdown
-// (raw `# headings`, `| pipe | tables |`, `**bold**`, `- bullets`, etc.)
-// to HTML before Quill ingests it. Only triggers on text-only pastes —
-// pastes from a webpage carry an HTML payload, and we let Quill handle
-// those normally so source formatting wins.
-function attachMarkdownPaste(quill) {
-    if (!quill || quill._ecrefMdPaste) return;
-    quill._ecrefMdPaste = true;
-    quill.root.addEventListener('paste', (e) => {
-        const cd = e.clipboardData;
-        if (!cd) return;
-        const html = cd.getData('text/html');
-        const text = cd.getData('text/plain');
-        // Skip if clipboard already has HTML — source formatting beats our guess.
-        if (html) return;
-        if (!text || !looksLikeMarkdown(text)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const converted = sanitizeHtml(markdownBodyToHtml(text));
-        if (!converted) return;
-        const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
-        if (range.length) quill.deleteText(range.index, range.length, 'user');
-        quill.clipboard.dangerouslyPasteHTML(range.index, converted, 'user');
-    }, true);  // capture phase — get there before Quill's own paste handler
+// Insert markdown (as user-supplied raw text) into a Quill instance.
+// Converts markdown → HTML, sanitizes, and uses the clipboard module
+// so Quill's Delta model stays in sync. Used by the "Paste markdown"
+// modal — there is no automatic paste-time conversion anymore: a
+// regular Ctrl+V paste of `# foo` stays literal.
+function insertMarkdownIntoQuill(quill, markdownText) {
+    if (!quill || !markdownText) return;
+    const html = sanitizeHtml(markdownBodyToHtml(markdownText));
+    if (!html) return;
+    const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+    if (range.length) quill.deleteText(range.index, range.length, 'user');
+    quill.clipboard.dangerouslyPasteHTML(range.index, html, 'user');
+    quill.setSelection(range.index + html.length, 0, 'user');
+}
+
+// "Paste markdown" modal — one shared modal, three target editors.
+// The button's data-md-target tells us which Quill instance receives
+// the converted HTML when the user hits Insert.
+const PASTE_MD_STATE = { modal: null, targetId: null };
+
+function getQuillById(id) {
+    if (id === 'refItemBody') return getRefItemQuill();
+    if (id === 'entryData')   return getKbQuill('data');
+    if (id === 'entryTemplate') return getKbQuill('template');
+    return null;
+}
+
+function initPasteMarkdownModal() {
+    const modalEl = document.getElementById('pasteMarkdownModal');
+    if (!modalEl) return;
+    PASTE_MD_STATE.modal = new bootstrap.Modal(modalEl);
+
+    // Delegated handler for every "Paste markdown" button on the page
+    document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('.md-paste-btn');
+        if (!btn) return;
+        PASTE_MD_STATE.targetId = btn.dataset.mdTarget;
+        document.getElementById('pasteMarkdownInput').value = '';
+        document.getElementById('pasteMarkdownPreview').innerHTML =
+            '<span class="text-muted small">Preview appears here as you type.</span>';
+        PASTE_MD_STATE.modal.show();
+        // Defer focus so Bootstrap finishes its own focus dance first
+        setTimeout(() => document.getElementById('pasteMarkdownInput')?.focus(), 100);
+    });
+
+    const inputEl = document.getElementById('pasteMarkdownInput');
+    const previewEl = document.getElementById('pasteMarkdownPreview');
+    inputEl?.addEventListener('input', () => {
+        const text = inputEl.value;
+        if (!text.trim()) {
+            previewEl.innerHTML = '<span class="text-muted small">Preview appears here as you type.</span>';
+            return;
+        }
+        previewEl.innerHTML = sanitizeHtml(markdownBodyToHtml(text))
+            || '<span class="text-muted small">(nothing to render)</span>';
+    });
+
+    document.getElementById('pasteMarkdownInsert')?.addEventListener('click', () => {
+        const text = inputEl.value;
+        if (!text.trim()) { PASTE_MD_STATE.modal.hide(); return; }
+        const quill = getQuillById(PASTE_MD_STATE.targetId);
+        if (!quill) { toast('Editor not ready.', 'error'); return; }
+        insertMarkdownIntoQuill(quill, text);
+        PASTE_MD_STATE.modal.hide();
+        toast('Markdown inserted.', 'success');
+    });
 }
 
 function getRefItemQuill() {
@@ -3693,7 +3788,6 @@ function getRefItemQuill() {
             },
         },
     });
-    attachMarkdownPaste(_refItemQuill);
     return _refItemQuill;
 }
 
