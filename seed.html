@@ -80,6 +80,9 @@
   <button id="seedCoreImBtn">Seed CoreIM podcast (~248 episodes)</button>
   <button id="seedMksapBtn">Seed MKSAP Topics (~191 chapters)</button>
   <button id="seedBoardReviewBtn">Seed Board Review Facts (~1560 cards)</button>
+  <button id="seedAbimObjectivesBtn">Seed ABIM Objectives (~1280 cards)</button>
+  <button id="seedCpsSchemasBtn">Seed CPSolvers Schemas (~250)</button>
+  <button id="seedCpsIllnessBtn">Seed CPSolvers Illness Scripts (~120)</button>
 </div>
 <div id="seedExtraStatus"></div>
 
@@ -317,37 +320,63 @@ $('seedCoreImBtn').addEventListener('click', async () => {
   }
 });
 
-$('seedBoardReviewBtn').addEventListener('click', async () => {
+async function seedListFromFile(section, file, prettyName, btn) {
+  try {
+    const fr = await fetch(file, { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`${file}: HTTP ${fr.status}`);
+    const items = await fr.json();
+    if (!confirm(`Replace ${prettyName} with ${items.length} entries? Existing items will be lost.`)) return;
+    await seedListSection(section, items, btn, prettyName);
+  } catch (e) {
+    const s = $('seedExtraStatus');
+    s.className = 'err'; s.textContent = `${prettyName} seed failed: ${e.message}`;
+  }
+}
+
+$('seedCpsSchemasBtn').addEventListener('click', () =>
+  seedListFromFile('cps-schemas', 'cps-schemas-seed.json', 'CPSolvers Schemas', $('seedCpsSchemasBtn'))
+);
+$('seedCpsIllnessBtn').addEventListener('click', () =>
+  seedListFromFile('cps-illness', 'cps-illness-seed.json', 'CPSolvers Illness Scripts', $('seedCpsIllnessBtn'))
+);
+
+async function seedMksapList(section, file, prettyName, btn) {
   const s = $('seedExtraStatus');
   s.className = ''; s.textContent = '';
-  const pw = prompt('Enter MKSAP password (board review uses the same gate):');
+  const pw = prompt(`Enter MKSAP password (${prettyName} uses the same gate):`);
   if (!pw) return;
-  const btn = $('seedBoardReviewBtn');
   btn.disabled = true; const orig = btn.textContent;
   btn.textContent = 'Loading seed JSON...';
   try {
-    const fr = await fetch('board-review-seed.json', { cache: 'no-store' });
-    if (!fr.ok) throw new Error(`board-review-seed.json: HTTP ${fr.status}`);
+    const fr = await fetch(file, { cache: 'no-store' });
+    if (!fr.ok) throw new Error(`${file}: HTTP ${fr.status}`);
     const items = await fr.json();
-    if (!confirm(`Replace Board Review Facts with ${items.length} cards? Existing items will be lost.`)) {
+    if (!confirm(`Replace ${prettyName} with ${items.length} cards? Existing items will be lost.`)) {
       btn.disabled = false; btn.textContent = orig; return;
     }
     btn.textContent = 'Seeding...';
     const r = await fetch('/api/seed-list-mksap', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${pw}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ section: 'board-review', items }),
+      body: JSON.stringify({ section, items }),
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
     s.className = 'ok';
-    s.textContent = `✓ Board Review: seeded ${j.count} cards.`;
+    s.textContent = `✓ ${prettyName}: seeded ${j.count} cards.`;
   } catch (e) {
-    s.className = 'err'; s.textContent = `Board Review seed failed: ${e.message}`;
+    s.className = 'err'; s.textContent = `${prettyName} seed failed: ${e.message}`;
   } finally {
     btn.disabled = false; btn.textContent = orig;
   }
-});
+}
+
+$('seedBoardReviewBtn').addEventListener('click', () =>
+  seedMksapList('board-review', 'board-review-seed.json', 'Board Review Facts', $('seedBoardReviewBtn'))
+);
+$('seedAbimObjectivesBtn').addEventListener('click', () =>
+  seedMksapList('abim-objectives', 'abim-objectives-seed.json', 'ABIM Objectives', $('seedAbimObjectivesBtn'))
+);
 
 $('seedAntibiogramBtn').addEventListener('click', async () => {
   const btn = $('seedAntibiogramBtn');

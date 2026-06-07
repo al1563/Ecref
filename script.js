@@ -2469,6 +2469,14 @@ const REFERENCE_TOC = [
     { id: 'core-im', title: 'CoreIM podcast', icon: 'fa-podcast', type: 'list',
       section: 'core-im', dailyPick: true,
       subtitle: 'Core IM podcast archive — 5 Pearls, Hoofbeats, Bytes, At The Bedside. One surfaces daily.' },
+    { id: 'g-cpsolvers', title: 'CPSolvers', icon: 'fa-brain', items: [
+        { id: 'cps-schemas', title: 'Diagnostic Schemas', icon: 'fa-sitemap', type: 'list',
+          section: 'cps-schemas', dailyPick: true,
+          subtitle: 'Clinical Problem Solvers diagnostic frameworks. Image embedded; click to view source.' },
+        { id: 'cps-illness', title: 'Illness Scripts', icon: 'fa-stethoscope', type: 'list',
+          section: 'cps-illness', dailyPick: true,
+          subtitle: 'Clinical Problem Solvers illness scripts. One surfaces daily.' },
+    ]},
     { id: 'g-uworld', title: 'UWorld', icon: 'fa-graduation-cap', gated: 'mksap', items: [
         { id: 'uw-flowsheets', title: 'Flow Sheet Tables', icon: 'fa-table-list',
           type: 'pdf-toc',
@@ -2480,14 +2488,14 @@ const REFERENCE_TOC = [
           tocJson: 'usmle-inner-circle-toc.json',
           overridesSection: 'usmle-toc-overrides',
           subtitle: 'USMLE Inner Circle Step 2/3 notes (1168 pages). One entry per chapter; long stacks load lazily.' },
-        { id: 'uw-learning-cards', title: 'Learning Cards', icon: 'fa-clipboard-list',
-          type: 'list',
-          section: 'uw', dailyPick: true,
-          subtitle: 'Personal learning cards — notes, mnemonics, key teaching points. One surfaces daily.' },
         { id: 'board-review', title: 'Board Review Facts', icon: 'fa-clipboard-check',
           type: 'list',
           section: 'board-review', dailyPick: true,
           subtitle: 'High-yield boards review facts, grouped by subspecialty. One surfaces daily.' },
+        { id: 'abim-objectives', title: 'ABIM Objectives', icon: 'fa-list-check',
+          type: 'list',
+          section: 'abim-objectives', dailyPick: 10,
+          subtitle: 'ABIM educational objectives across all subspecialties. 10 surface daily by default.' },
     ]},
     { id: 'mksap', title: 'MKSAP Boards Basics', icon: 'fa-lock', type: 'mksap-content',
       dailyPick: true,
@@ -2846,8 +2854,9 @@ function renderListSectionBody(node, items) {
         })
         : sorted;
 
-    const pickHtml = node.dailyPick && items.length && !q
-        ? renderDailyPickHtml(items, node.title)
+    const pickDefault = normalizeDailyPickFlag(node.dailyPick);
+    const pickHtml = pickDefault && items.length && !q
+        ? renderDailyPickHtml(items, node.title, node.section, pickDefault)
         : '';
 
     const canEdit = isMksapGated ? REFERENCE_STATE.mksapUnlocked : editorReadyHtml();
@@ -2956,8 +2965,9 @@ async function renderMksapSection(node) {
     REFERENCE_STATE.lists[node.section] = items;
 
     const sorted = items.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    const pickHtml = node.dailyPick && items.length
-        ? renderDailyPickHtml(items, node.title)
+    const pickDefault = normalizeDailyPickFlag(node.dailyPick);
+    const pickHtml = pickDefault && items.length
+        ? renderDailyPickHtml(items, node.title, node.section, pickDefault)
         : '';
     const listHtml = sorted.length
         ? sorted.map(i => renderListItemHtml(i, node.section)).join('')
@@ -3414,30 +3424,158 @@ function renderListItemHtml(item, section) {
     </div>`;
 }
 
-function renderDailyPickHtml(items, sectionTitle) {
-    const pick = pickOfTheDay(items);
-    if (!pick) return '';
-    const titleHtml = pick.url
-        ? `<a href="${escapeHtml(pick.url)}" target="_blank" rel="noopener">${escapeHtml(pick.title || '(no title)')}</a>`
-        : escapeHtml(pick.title || '(no title)');
+// Daily pick — supports either a single pick (`count === 1`, original behavior)
+// or up to N picks rendered as a compact stacked list. Per-section count
+// override lives in localStorage under `ecref.dailyPickCount.<section>`.
+//
+// The dropdown lets the user change the count or hide picks entirely; click
+// any pick row to view the full item in a read-only modal.
+const DAILY_PICK_OPTIONS = [0, 1, 5, 10];   // 0 = hidden
+const DAILY_PICK_STORAGE = 'ecref.dailyPickCount';
+
+function normalizeDailyPickFlag(flag) {
+    // `dailyPick: true` → 1; `dailyPick: <n>` → n; falsy → 0.
+    if (flag === true) return 1;
+    const n = Number(flag);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+function getDailyPickCount(section, defaultCount) {
+    try {
+        const raw = localStorage.getItem(`${DAILY_PICK_STORAGE}.${section}`);
+        if (raw == null) return defaultCount;
+        const n = parseInt(raw, 10);
+        return Number.isFinite(n) && n >= 0 ? n : defaultCount;
+    } catch (e) { return defaultCount; }
+}
+
+function setDailyPickCount(section, count) {
+    try { localStorage.setItem(`${DAILY_PICK_STORAGE}.${section}`, String(count)); }
+    catch (e) { /* localStorage disabled */ }
+}
+
+function renderDailyPickHtml(items, sectionTitle, section, defaultCount) {
+    const count = getDailyPickCount(section, defaultCount);
+    if (!count || !items.length) return '';
+    const picks = picksOfTheDay(items, count);
+    if (!picks.length) return '';
     const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-    return `<div class="reference-pick">
-        <div class="reference-pick-label">
-            <i class="fas fa-star"></i>Today's ${escapeHtml(sectionTitle)} pick · ${escapeHtml(today)}
-        </div>
-        <div class="reference-pick-title">${titleHtml}</div>
-        ${pick.body ? `<div class="reference-pick-body">${renderBody(pick.body)}</div>` : ''}
-        ${((pick.images && pick.images.length) ? pick.images : (pick.image ? [pick.image] : [])).map(u => `<div class="reference-pick-body"><img src="${escapeHtml(u)}" alt=""></div>`).join('')}
+    const dropdown = renderPickCountDropdown(section, count);
+    const isMulti = picks.length > 1;
+    const labelText = isMulti
+        ? `Today's ${escapeHtml(sectionTitle)} picks · ${escapeHtml(today)}`
+        : `Today's ${escapeHtml(sectionTitle)} pick · ${escapeHtml(today)}`;
+    const header = `<div class="reference-pick-header">
+        <div class="reference-pick-label"><i class="fas fa-star"></i>${labelText}</div>
+        ${dropdown}
+    </div>`;
+
+    if (!isMulti) {
+        const pick = picks[0];
+        const titleHtml = pick.url
+            ? `<a href="${escapeHtml(pick.url)}" target="_blank" rel="noopener">${escapeHtml(pick.title || '(no title)')}</a>`
+            : `<a href="#" data-ref-view="${escapeHtml(section)}/${escapeHtml(pick.id)}">${escapeHtml(pick.title || '(no title)')}</a>`;
+        return `<div class="reference-pick" data-pick-section="${escapeHtml(section)}">
+            ${header}
+            <div class="reference-pick-title">${titleHtml}</div>
+            ${pick.body ? `<div class="reference-pick-body">${renderBody(pick.body)}</div>` : ''}
+            ${((pick.images && pick.images.length) ? pick.images : (pick.image ? [pick.image] : [])).map(u => `<div class="reference-pick-body"><img src="${escapeHtml(u)}" alt=""></div>`).join('')}
+        </div>`;
+    }
+
+    const rows = picks.map((p, i) => {
+        const snippet = pickSnippet(p);
+        const tag = (p.tags || [])[0] || '';
+        return `<a href="#" class="reference-pick-row" data-ref-view="${escapeHtml(section)}/${escapeHtml(p.id)}">
+            <span class="reference-pick-row-num">${i + 1}.</span>
+            <span class="reference-pick-row-body">
+                <span class="reference-pick-row-title">${escapeHtml(p.title || '(no title)')}</span>
+                ${tag ? `<span class="reference-pick-row-tag">${escapeHtml(tag)}</span>` : ''}
+                ${snippet ? `<span class="reference-pick-row-snippet">${escapeHtml(snippet)}</span>` : ''}
+            </span>
+        </a>`;
+    }).join('');
+    return `<div class="reference-pick reference-pick-multi" data-pick-section="${escapeHtml(section)}">
+        ${header}
+        <div class="reference-pick-rows">${rows}</div>
     </div>`;
 }
 
-// Deterministic daily pick — same item all day, rotates at local midnight
-function pickOfTheDay(items) {
-    if (!items.length) return null;
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    let hash = 7;
-    for (let i = 0; i < today.length; i++) hash = ((hash * 31) + today.charCodeAt(i)) >>> 0;
-    return items[hash % items.length];
+function renderPickCountDropdown(section, current) {
+    const opts = DAILY_PICK_OPTIONS.map(n => {
+        const label = n === 0 ? 'Off' : String(n);
+        const sel = n === current ? ' selected' : '';
+        return `<option value="${n}"${sel}>${label}</option>`;
+    }).join('');
+    return `<select class="reference-pick-count" data-pick-count="${escapeHtml(section)}" title="How many picks to show per day">${opts}</select>`;
+}
+
+function pickSnippet(item) {
+    const raw = (item.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    return raw.length > 140 ? raw.slice(0, 137).trimEnd() + '…' : raw;
+}
+
+// Deterministic daily picks — same items all day, rotates at local midnight.
+// `count === 1` returns a single-element array (back-compat for the original
+// pickOfTheDay use case). Larger counts use a seeded Fisher-Yates shuffle so
+// the same date + same items yields the same N picks with no dupes.
+function picksOfTheDay(items, count) {
+    if (!items.length || count <= 0) return [];
+    const n = Math.min(count, items.length);
+    const seed = dailyHashSeed();
+    if (n === 1) {
+        return [items[seed % items.length]];
+    }
+    const rng = mulberry32(seed);
+    const idx = items.map((_, i) => i);
+    for (let i = idx.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    return idx.slice(0, n).map(i => items[i]);
+}
+
+function dailyHashSeed() {
+    const today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD
+    let h = 7;
+    for (let i = 0; i < today.length; i++) h = ((h * 31) + today.charCodeAt(i)) >>> 0;
+    return h;
+}
+
+function mulberry32(a) {
+    return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// Read-only viewer triggered by clicking a pick row.
+function openRefItemView(section, id) {
+    const item = (REFERENCE_STATE.lists[section] || []).find(i => i.id === id);
+    if (!item) return;
+    const modal = document.getElementById('refItemViewModal');
+    if (!modal) return;
+    document.getElementById('refItemViewLabel').textContent = item.title || '(no title)';
+    const subtitleEl = document.getElementById('refItemViewSubtitle');
+    const tags = (item.tags || []).filter(Boolean);
+    const sourceHtml = item.url
+        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="me-2"><i class="fas fa-link me-1"></i>${escapeHtml(urlDomain(item.url) || item.url)}</a>`
+        : '';
+    const tagsHtml = tags.map(t => `<span class="badge bg-light text-dark me-1">${escapeHtml(t)}</span>`).join('');
+    subtitleEl.innerHTML = sourceHtml + tagsHtml;
+    const bodyEl = document.getElementById('refItemViewBody');
+    const itemImages = (item.images && item.images.length) ? item.images : (item.image ? [item.image] : []);
+    const imgHtml = itemImages.map(u => `<img src="${escapeHtml(u)}" alt="" class="img-fluid mt-2">`).join('');
+    bodyEl.innerHTML = (item.body ? sanitizeHtml(item.body) : '<p class="text-muted">No body.</p>') + imgHtml;
+    bodyEl.querySelectorAll('img').forEach(im => im.addEventListener('click', e => openImageModal(e.target.src)));
+    if (!REFERENCE_STATE.refItemViewModal) {
+        REFERENCE_STATE.refItemViewModal = new bootstrap.Modal(modal);
+    }
+    REFERENCE_STATE.refItemViewModal.show();
 }
 
 // ----- Editor readiness gate -----
@@ -3484,6 +3622,25 @@ function wireListActions(viewer, section) {
     viewer.querySelectorAll('[data-ref-delete]').forEach(el => {
         const [sec, id] = el.dataset.refDelete.split('/');
         el.addEventListener('click', () => guard(() => deleteRefItem(sec, id)));
+    });
+    // Pick-row read-only view (no auth gate — these are items the user is
+    // already entitled to see in the list below).
+    viewer.querySelectorAll('[data-ref-view]').forEach(el => {
+        el.addEventListener('click', e => {
+            e.preventDefault();
+            const [sec, id] = el.dataset.refView.split('/');
+            openRefItemView(sec, id);
+        });
+    });
+    // Daily-pick count dropdown — persist + re-render this section only.
+    viewer.querySelectorAll('[data-pick-count]').forEach(sel => {
+        sel.addEventListener('change', e => {
+            const sec = e.target.dataset.pickCount;
+            const n = parseInt(e.target.value, 10);
+            setDailyPickCount(sec, Number.isFinite(n) ? n : 1);
+            // Re-render the active section in place.
+            if (REFERENCE_STATE.activeId) loadReferenceItem(REFERENCE_STATE.activeId);
+        });
     });
 }
 
@@ -3914,7 +4071,10 @@ function openRefItemModal(section, item) {
 function sectionPrettyName(s) {
     return { ebm: 'EBM articles', uw: 'UW Learning Cards', 'abx-extras': 'Antibiotics extras',
              'uci-antibiogram': 'UCI Antibiogram', mksap: 'MKSAP Boards Basics',
-             'core-im': 'CoreIM podcast', 'board-review': 'Board Review Facts' }[s] || s;
+             'core-im': 'CoreIM podcast', 'board-review': 'Board Review Facts',
+             'abim-objectives': 'ABIM Objectives',
+             'cps-illness': 'CPSolvers — Illness Scripts',
+             'cps-schemas': 'CPSolvers — Diagnostic Schemas' }[s] || s;
 }
 
 async function uploadRefItemImage(file) {
@@ -4176,9 +4336,11 @@ async function renderMksapContentSection(node) {
 
     renderMksapContentSidebar(node);
 
-    // Show today's pick on first load (placeholder area)
+    // Show today's pick on first load (placeholder area).
+    // MKSAP topic viewer always shows a single pick — the multi-pick UI is
+    // only meaningful for sections whose items render as a list.
     if (node.dailyPick && !MKSAP_CONTENT_STATE.activeId) {
-        const pick = pickOfTheDay(idx);
+        const pick = picksOfTheDay(idx, 1)[0];
         if (pick) showMksapDailyPick(pick);
     }
 

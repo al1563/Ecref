@@ -8,10 +8,10 @@
 import { setList, isKvConfigured } from '../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../lib/auth.js';
 
-const ALLOWED = new Set(['board-review']);
+const ALLOWED = new Set(['board-review', 'abim-objectives']);
 
 export const config = {
-    api: { bodyParser: { sizeLimit: '4mb' } },
+    api: { bodyParser: { sizeLimit: '8mb' } },
 };
 
 export default async function handler(req, res) {

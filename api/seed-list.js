@@ -8,9 +8,9 @@ import { checkAuth, sendUnauthorized } from '../lib/auth.js';
 const ALLOWED = new Set([
     'ebm', 'uw', 'abx-extras', 'uci-antibiogram',
     'uw-toc-overrides', 'usmle-toc-overrides', 'dot-phrases',
-    'core-im',
-    // mksap and board-review intentionally NOT here — they use MKSAP_PASSWORD.
-    // Seed those via /api/seed-list-mksap.
+    'core-im', 'cps-illness', 'cps-schemas',
+    // mksap, board-review, abim-objectives intentionally NOT here — they
+    // use MKSAP_PASSWORD. Seed those via /api/seed-list-mksap.
 ]);
 
 export const config = {

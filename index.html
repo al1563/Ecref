@@ -19,7 +19,7 @@
                 <small class="opacity-75">UCI Medical Center - Clinical Guidelines & Database</small>
             </div>
             <div>
-                <span class="badge bg-light text-dark">v2026.17</span>
+                <span class="badge bg-light text-dark">v2026.18</span>
             </div>
         </div>
     </div>
@@ -968,6 +968,25 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="pasteMarkdownInsert"><i class="fas fa-arrow-down me-1"></i>Insert into editor</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reference item read-only viewer (used by daily-pick rows) -->
+    <div class="modal fade" id="refItemViewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="refItemViewLabel">Item</h5>
+                        <div id="refItemViewSubtitle" class="small text-muted mt-1"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body ref-item-view-body" id="refItemViewBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

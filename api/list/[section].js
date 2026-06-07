@@ -18,7 +18,10 @@ const SECTIONS = {
     'usmle-toc-overrides':{ writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
     'dot-phrases':        { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
     'core-im':            { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'cps-illness':        { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
+    'cps-schemas':        { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
     'board-review':       { writeAuth: 'MKSAP_PASSWORD',  publicRead: false },
+    'abim-objectives':    { writeAuth: 'MKSAP_PASSWORD',  publicRead: false },
     'mksap':              { writeAuth: 'MKSAP_PASSWORD',  publicRead: false },
 };
 
