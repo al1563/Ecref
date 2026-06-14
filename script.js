@@ -1800,6 +1800,24 @@ function wireEntryEditor() {
     document.getElementById('entrySaveBtn')?.addEventListener('click', saveEntry);
     document.getElementById('entryDeleteBtn')?.addEventListener('click', confirmDeleteEntry);
 
+    // Quill needs the container to have its final width before it builds
+    // the toolbar, otherwise the formatting bar gets miscomputed (especially
+    // for the second editor, which renders in cramped layout). Apply the
+    // pending bodies AFTER the modal is fully shown.
+    const entryModalEl = document.getElementById('entryModal');
+    entryModalEl?.addEventListener('shown.bs.modal', () => {
+        const pending = EDITOR_STATE._pendingBodies;
+        if (pending) {
+            setKbBody('data', pending.data);
+            setKbBody('template', pending.template);
+            EDITOR_STATE._pendingBodies = null;
+        }
+        // Defensive: if the Quills were created in a previous open while
+        // the modal was smaller, force a layout refresh now.
+        try { _kbQuill.data && _kbQuill.data.update('user'); } catch (_) {}
+        try { _kbQuill.template && _kbQuill.template.update('user'); } catch (_) {}
+    });
+
     // Tag chip input
     const tagInput = document.getElementById('entryTagInput');
     tagInput?.addEventListener('keydown', e => {
@@ -1927,6 +1945,8 @@ function openEntryEditor(id) {
         document.getElementById('entryModalLabel').textContent = isEdit ? 'Edit entry' : 'Add entry';
         document.getElementById('entryDeleteBtn').style.display = isEdit ? 'inline-block' : 'none';
 
+        let pendingData = '';
+        let pendingTemplate = '';
         if (isEdit) {
             const entry = KB_STATE.entries.find(e => e.id === id);
             if (!entry) {
@@ -1943,21 +1963,26 @@ function openEntryEditor(id) {
             const dataLines = (entry.data || '').split('\n');
             const titleLine = dataLines.findIndex(l => l.trim().replace(/^#+\s*/, ''));
             const bodyLines = titleLine >= 0 ? dataLines.slice(titleLine + 1) : dataLines;
-            setKbBody('data', bodyLines.join('\n').replace(/^\n+/, ''));
-            setKbBody('template', entry.template || '');
+            pendingData = bodyLines.join('\n').replace(/^\n+/, '');
+            pendingTemplate = entry.template || '';
         } else {
             document.getElementById('entryTitle').value = '';
             document.getElementById('entryCategory').value = KB_STATE.category || 'Other';
             EDITOR_STATE.tags = [];
             EDITOR_STATE.links = [];
             EDITOR_STATE.images = [];
-            setKbBody('data', '');
-            setKbBody('template', '');
         }
         document.getElementById('entryTagInput').value = '';
         renderEditorTags();
         renderEditorLinks();
         renderEditorImages();
+
+        // Defer Quill construction + body load until after the modal is
+        // actually visible. If we do this while the modal is display:none,
+        // Quill measures the container at 0 width and the toolbar lays out
+        // wrong — the second editor in particular ends up with no room for
+        // the formatting bar.
+        EDITOR_STATE._pendingBodies = { data: pendingData, template: pendingTemplate };
         EDITOR_STATE.entryModal?.show();
     });
 }
