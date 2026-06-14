@@ -1881,9 +1881,16 @@ table.dataTable tbody td {
 }
 .ref-item-image-remove:hover { background: rgba(180, 0, 0, 0.85); }
 
-/* Quill editor inside the ref-item modal. */
+/* Quill editor inside the ref-item modal.
+   `height: auto` overrides Quill's default `.ql-container { height: 100% }`.
+   In `.modal-dialog-scrollable`, the modal body has a defined height which
+   propagates down to the column, so the 100% resolves to "all remaining
+   space" and gets clamped to max-height even when empty. Setting auto lets
+   the wrapper size to content within min/max bounds; .ql-editor's own
+   overflow-y: auto still handles scrolling when content exceeds max. */
 .ref-item-quill,
 .entry-quill {
+    height: auto;
     min-height: 240px;
     max-height: 480px;
     background: white;
@@ -1893,6 +1900,7 @@ table.dataTable tbody td {
 /* Second KB editor (template / order set) — intentionally shorter than the
    primary data field; gives a more compact modal overall. */
 .entry-quill-template {
+    height: auto;
     min-height: 180px;
     max-height: 360px;
 }
