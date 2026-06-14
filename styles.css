@@ -1901,20 +1901,6 @@ table.dataTable tbody td {
     font-size: 0.95rem;
 }
 
-/* Toolbar layout. Quill's default is inline-block with implicit wrap; making
-   it explicit flex-wrap keeps the row tidy when the modal width is tight
-   (e.g. on smaller laptops where modal-xl falls back to modal-lg) and stops
-   the second editor's toolbar from looking visually cramped vs. the first. */
-.ql-toolbar.ql-snow {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 6px;
-    padding: 6px 8px;
-}
-.ql-toolbar.ql-snow .ql-formats {
-    margin-right: 0;
-}
 
 /* Pasted tables inside Quill — rendered as a non-editable block via the
    custom `table-html` Blot. The wrapper carries the `ql-table-static`
