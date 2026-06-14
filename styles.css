@@ -1881,24 +1881,29 @@ table.dataTable tbody td {
 }
 .ref-item-image-remove:hover { background: rgba(180, 0, 0, 0.85); }
 
-/* Quill editor inside the ref-item modal. Both KB editors (data + template)
-   use the same dimensions so the formatting toolbars match width-for-width
-   and don't end up cramped. */
+/* Quill editor inside the ref-item modal. */
 .ref-item-quill,
-.entry-quill,
-.entry-quill-template {
+.entry-quill {
     min-height: 240px;
     max-height: 480px;
     background: white;
     font-size: 0.95rem;
     border-radius: 0 0 4px 4px;
 }
+/* Second KB editor (template / order set) — intentionally shorter than the
+   primary data field; gives a more compact modal overall. */
+.entry-quill-template {
+    min-height: 180px;
+    max-height: 360px;
+}
 .ref-item-quill .ql-editor,
-.entry-quill .ql-editor,
-.entry-quill-template .ql-editor {
+.entry-quill .ql-editor {
     min-height: 180px;
     line-height: 1.5;
     font-size: 0.95rem;
+}
+.entry-quill-template .ql-editor {
+    min-height: 140px;
 }
 
 
