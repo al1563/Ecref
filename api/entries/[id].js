@@ -4,6 +4,7 @@
 
 import { updateEntry, deleteEntry, isKvConfigured } from '../../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../../lib/auth.js';
+import { rejectIfBase64 } from '../../lib/guard.js';
 
 export default async function handler(req, res) {
     if (!isKvConfigured()) {
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     try {
         if (req.method === 'PUT') {
             const patch = req.body || {};
+            if (rejectIfBase64(patch, res)) return;
             const updated = await updateEntry(id, patch);
             if (!updated) return res.status(404).json({ error: 'Entry not found' });
             return res.status(200).json({ entry: updated });

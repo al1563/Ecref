@@ -4,6 +4,7 @@
 
 import { updateListItem, deleteListItem, isKvConfigured } from '../../../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../../../lib/auth.js';
+import { rejectIfBase64 } from '../../../lib/guard.js';
 
 const SECTIONS = {
     'ebm':                { writeAuth: 'EDITOR_PASSWORD' },
@@ -14,7 +15,10 @@ const SECTIONS = {
     'usmle-toc-overrides':{ writeAuth: 'EDITOR_PASSWORD' },
     'dot-phrases':        { writeAuth: 'EDITOR_PASSWORD' },
     'core-im':            { writeAuth: 'EDITOR_PASSWORD' },
+    'cps-illness':        { writeAuth: 'EDITOR_PASSWORD' },
+    'cps-schemas':        { writeAuth: 'EDITOR_PASSWORD' },
     'board-review':       { writeAuth: 'MKSAP_PASSWORD'  },
+    'abim-objectives':    { writeAuth: 'MKSAP_PASSWORD'  },
     'mksap':              { writeAuth: 'MKSAP_PASSWORD'  },
 };
 
@@ -34,6 +38,7 @@ export default async function handler(req, res) {
     try {
         if (req.method === 'PUT') {
             const patch = req.body || {};
+            if (rejectIfBase64(patch, res)) return;
             const updated = await updateListItem(section, id, patch);
             if (!updated) return res.status(404).json({ error: 'Item not found' });
             return res.status(200).json({ item: updated });

@@ -1894,6 +1894,7 @@ function getKbQuill(which) {
             },
         },
     });
+    attachImagePasteInterceptor(_kbQuill[which]);
     return _kbQuill[which];
 }
 
@@ -3856,6 +3857,149 @@ function quillClipboardMatchers() {
     ];
 }
 
+// ----- Image-paste interceptor (Step 2 of base64→R2 migration) -------------
+// Pasting a screenshot or copying an <img> from another tab lets Quill
+// inline the bytes as `data:image/...;base64,...`. A single screenshot can
+// add 500 KB+ to the editor body. Multiple of these per entry pushed the
+// Vercel KV `database` blob to the 10 MB per-request ceiling. This handler
+// intercepts paste + drop events on each Quill, uploads images to R2,
+// and inserts the returned URL instead of the bytes.
+//
+// Attached once per Quill instance (in getKbQuill / getRefItemQuill).
+function attachImagePasteInterceptor(quill) {
+    if (!quill || !quill.root) return;
+    // Capture phase so we run before Quill's bubble-phase clipboard module.
+    quill.root.addEventListener('paste', e => handleEditorImagePaste(quill, e, false), true);
+    quill.root.addEventListener('drop',  e => handleEditorImagePaste(quill, e, true),  true);
+}
+
+async function handleEditorImagePaste(quill, event, isDrop) {
+    const dt = isDrop ? event.dataTransfer : event.clipboardData;
+    if (!dt) return;
+
+    // Files from the clipboard / drop. Screenshots come through here.
+    const files = [];
+    for (const it of (dt.items || [])) {
+        if (it.kind === 'file' && it.type && it.type.startsWith('image/')) {
+            const f = it.getAsFile();
+            if (f) files.push(f);
+        }
+    }
+    if (!files.length && dt.files) {
+        for (const f of dt.files) {
+            if (f.type && f.type.startsWith('image/')) files.push(f);
+        }
+    }
+
+    // Inline data: URIs inside pasted HTML. Sites/Word/PDFs sometimes embed
+    // bytes inside <img src="data:image/...;base64,...">.
+    const html = (!isDrop && dt.getData) ? (dt.getData('text/html') || '') : '';
+    const inlineBase64Re = /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i;
+    const hasInlineBase64 = inlineBase64Re.test(html);
+
+    if (!files.length && !hasInlineBase64) return;   // ordinary text/HTML paste — let Quill handle it
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const password = pickEditorPasswordFor(quill);
+    if (!password) {
+        toast('Editor not unlocked — image paste needs the editor password.', 'error');
+        return;
+    }
+
+    let progress;
+    try {
+        if (files.length) {
+            progress = toast(`Uploading pasted image${files.length > 1 ? 's' : ''}...`, 'info', { duration: 0 });
+            const urls = [];
+            for (const f of files) urls.push(await uploadEditorImageToR2(f, password));
+            for (const u of urls) insertImageAtCursor(quill, u);
+        }
+        if (hasInlineBase64) {
+            if (!progress) progress = toast('Uploading pasted images...', 'info', { duration: 0 });
+            const rewritten = await rewriteDataUrisInHtml(html, password);
+            const safe = sanitizeHtml(rewritten);
+            const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+            if (range.length) quill.deleteText(range.index, range.length, 'user');
+            quill.clipboard.dangerouslyPasteHTML(range.index, safe, 'user');
+        }
+    } catch (e) {
+        toast('Image paste failed: ' + (e.message || e), 'error', { duration: 5000 });
+    } finally {
+        if (progress && typeof progress.hide === 'function') progress.hide();
+    }
+}
+
+async function uploadEditorImageToR2(file, password) {
+    const b64 = await fileToB64(file);
+    const ext = (file.type.split('/')[1] || 'png').split(';')[0];
+    const filename = file.name || `pasted-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`;
+    const r = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, contentB64: b64, contentType: file.type }),
+    });
+    if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${r.status}`);
+    }
+    return (await r.json()).url;
+}
+
+// Rewrite every <img src="data:image/...;base64,...">  in a chunk of HTML
+// to a hotlinkable R2 URL. Uploads sequentially to keep ordering simple.
+// Failures fall back to leaving the original src (caller will sanitize).
+async function rewriteDataUrisInHtml(html, password) {
+    const re = /(<img\b[^>]*\bsrc\s*=\s*["'])data:image\/([a-z0-9+.\-]+);base64,([^"']+)(["'])/gi;
+    const matches = [...html.matchAll(re)];
+    if (!matches.length) return html;
+    const replacements = [];
+    for (const m of matches) {
+        const ext = m[2].toLowerCase();
+        const b64 = m[3].replace(/\s+/g, '');
+        try {
+            const r = await fetch('/api/upload-image', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: `pasted-html-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`,
+                    contentB64: b64,
+                    contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+                }),
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            replacements.push((await r.json()).url);
+        } catch (e) {
+            console.warn('rewriteDataUrisInHtml: upload failed, leaving original', e);
+            replacements.push(null);
+        }
+    }
+    let i = 0;
+    return html.replace(re, (full, pre, ext, b64, post) => {
+        const url = replacements[i++];
+        return url ? `${pre}${url}${post}` : full;
+    });
+}
+
+function insertImageAtCursor(quill, url) {
+    const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+    if (range.length) quill.deleteText(range.index, range.length, 'user');
+    quill.insertEmbed(range.index, 'image', url, 'user');
+    quill.setSelection(range.index + 1, 0, 'user');
+}
+
+function pickEditorPasswordFor(quill) {
+    // Reference item editor: section may be MKSAP-gated.
+    if (typeof _refItemQuill !== 'undefined' && quill === _refItemQuill
+        && REFERENCE_STATE && REFERENCE_STATE.refItemSection
+        && typeof sectionUsesMksap === 'function'
+        && sectionUsesMksap(REFERENCE_STATE.refItemSection)) {
+        return REFERENCE_STATE.mksapPassword;
+    }
+    return EDITOR_STATE.apiPassword;
+}
+
 // Insert markdown (as user-supplied raw text) into a Quill instance.
 // Converts markdown → HTML, sanitizes, and uses the clipboard module
 // so Quill's Delta model stays in sync. Used by the "Paste markdown"
@@ -3945,6 +4089,7 @@ function getRefItemQuill() {
             },
         },
     });
+    attachImagePasteInterceptor(_refItemQuill);
     return _refItemQuill;
 }
 

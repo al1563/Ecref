@@ -11,6 +11,9 @@ tools/
 .env*.local
 node_modules/
 
+# DB backups created by tools/migrate-kv-base64-to-r2.py and similar
+backups/
+
 # Source PDFs + chopped page JPGs — served from Cloudflare R2 instead.
 # To re-upload after editing locally: see tools/upload-to-r2.js
 docs/*.pdf

@@ -4,6 +4,7 @@
 
 import { getAllEntries, addEntry, isKvConfigured } from '../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../lib/auth.js';
+import { rejectIfBase64 } from '../lib/guard.js';
 
 export default async function handler(req, res) {
     if (!isKvConfigured()) {
@@ -25,6 +26,7 @@ export default async function handler(req, res) {
             if (!entry || !entry.id) {
                 return res.status(400).json({ error: 'entry.id is required' });
             }
+            if (rejectIfBase64(entry, res)) return;
             const saved = await addEntry(entry);
             return res.status(201).json({ entry: saved });
         }

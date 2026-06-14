@@ -8,6 +8,7 @@
 
 import { getList, addListItem, isKvConfigured } from '../../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../../lib/auth.js';
+import { rejectIfBase64 } from '../../lib/guard.js';
 
 const SECTIONS = {
     'ebm':                { writeAuth: 'EDITOR_PASSWORD', publicRead: true  },
@@ -50,6 +51,7 @@ export default async function handler(req, res) {
             if (!auth.ok) return sendUnauthorized(res, auth.reason);
             const item = req.body;
             if (!item || !item.id) return res.status(400).json({ error: 'item.id is required' });
+            if (rejectIfBase64(item, res)) return;
             const saved = await addListItem(section, item);
             return res.status(201).json({ item: saved });
         }

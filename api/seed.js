@@ -6,6 +6,11 @@
 
 import { setAllEntries, isKvConfigured } from '../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../lib/auth.js';
+import { rejectIfBase64 } from '../lib/guard.js';
+
+export const config = {
+    api: { bodyParser: { sizeLimit: '8mb' } },
+};
 
 export default async function handler(req, res) {
     if (!isKvConfigured()) {
@@ -23,6 +28,7 @@ export default async function handler(req, res) {
         if (!Array.isArray(database)) {
             return res.status(400).json({ error: 'request body must be { database: [...] }' });
         }
+        if (rejectIfBase64(database, res)) return;
         await setAllEntries(database);
         return res.status(200).json({ count: database.length });
     } catch (e) {

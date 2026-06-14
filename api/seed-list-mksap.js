@@ -7,6 +7,7 @@
 
 import { setList, isKvConfigured } from '../lib/kv.js';
 import { checkAuth, sendUnauthorized } from '../lib/auth.js';
+import { rejectIfBase64 } from '../lib/guard.js';
 
 const ALLOWED = new Set(['board-review', 'abim-objectives']);
 
@@ -32,6 +33,7 @@ export default async function handler(req, res) {
     if (!Array.isArray(items)) {
         return res.status(400).json({ error: 'items must be an array' });
     }
+    if (rejectIfBase64(items, res)) return;
 
     try {
         await setList(section, items);
