@@ -2046,9 +2046,41 @@ function renderEditorImages() {
     }).join('');
 }
 
+// Vercel's platform request-body limit is 4.5 MB. Base64 encoding bloats
+// binary by ~33%, so the practical raw-file ceiling is ~3.3 MB. Anything
+// larger gets rejected with FUNCTION_PAYLOAD_TOO_LARGE before our code runs.
+const MAX_UPLOAD_BYTES = 3_300_000;
+
+function isUnsupportedImageType(file) {
+    const name = (file.name || '').toLowerCase();
+    const type = (file.type || '').toLowerCase();
+    return type === 'image/heic' || type === 'image/heif'
+        || name.endsWith('.heic') || name.endsWith('.heif');
+}
+
+function imageUploadPrecheck(file) {
+    if (isUnsupportedImageType(file)) {
+        return 'HEIC/HEIF isn’t supported in most browsers (Chrome/Firefox can’t display it). '
+             + 'Convert to JPEG or PNG first: Preview → File → Export As → JPEG, '
+             + 'or right-click the file in Finder → Quick Actions → Convert Image.';
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+        const mb = (file.size / 1024 / 1024).toFixed(1);
+        return `Image is ${mb} MB — too large to upload (limit ~3.3 MB raw, ~4.5 MB after encoding). `
+             + 'Compress it in Preview (Tools → Adjust Size, or Export As JPEG with lower quality) and try again.';
+    }
+    return null;
+}
+
 async function handleImageFiles(files) {
     for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
+        if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name || '')) continue;
+
+        const reason = imageUploadPrecheck(file);
+        if (reason) {
+            toast(reason, 'error', { duration: 10000 });
+            continue;
+        }
 
         // API mode: try R2 upload first (instant). Fall back to GitHub queue if it fails.
         if (EDITOR_STATE.mode === 'api' && EDITOR_STATE.apiPassword) {
@@ -2075,6 +2107,13 @@ async function handleImageFiles(files) {
                     EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
                     toast('R2 not configured on the server (check /api/health). Image queued for GitHub commit instead.', 'error', { duration: 8000 });
                     await queueImageForGithub(file);
+                    continue;
+                }
+                if (r.status === 413) {
+                    EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
+                    renderEditorImages();
+                    const mb = (file.size / 1024 / 1024).toFixed(1);
+                    toast(`Vercel rejected the upload (${mb} MB raw, exceeds 4.5 MB after encoding). Compress the image and try again.`, 'error', { duration: 8000 });
                     continue;
                 }
                 if (!r.ok) {
@@ -3912,9 +3951,22 @@ async function handleEditorImagePaste(quill, event, isDrop) {
     }
     if (!files.length && dt.files) {
         for (const f of dt.files) {
-            if (f.type && f.type.startsWith('image/')) files.push(f);
+            if ((f.type && f.type.startsWith('image/')) || /\.(heic|heif)$/i.test(f.name || '')) {
+                files.push(f);
+            }
         }
     }
+
+    // Reject HEIC/HEIF and oversize files before we even POST — Vercel
+    // would 413 them anyway, and HEIC won't render in most browsers.
+    const rejected = [];
+    const accepted = [];
+    for (const f of files) {
+        const reason = imageUploadPrecheck(f);
+        if (reason) rejected.push({ file: f, reason });
+        else accepted.push(f);
+    }
+    for (const r of rejected) toast(r.reason, 'error', { duration: 10000 });
 
     // Inline data: URIs inside pasted HTML. Sites/Word/PDFs sometimes embed
     // bytes inside <img src="data:image/...;base64,...">.
@@ -3922,7 +3974,12 @@ async function handleEditorImagePaste(quill, event, isDrop) {
     const inlineBase64Re = /<img\b[^>]*\bsrc\s*=\s*["']data:image\//i;
     const hasInlineBase64 = inlineBase64Re.test(html);
 
-    if (!files.length && !hasInlineBase64) return;   // ordinary text/HTML paste — let Quill handle it
+    if (!accepted.length && !hasInlineBase64) {
+        // Even an all-rejected set of files counts as an image-paste attempt
+        // — swallow the event so Quill doesn't fall back to inlining anything.
+        if (rejected.length) { event.preventDefault(); event.stopPropagation(); }
+        return;
+    }
 
     event.preventDefault();
     event.stopPropagation();
@@ -3935,10 +3992,17 @@ async function handleEditorImagePaste(quill, event, isDrop) {
 
     let progress;
     try {
-        if (files.length) {
-            progress = toast(`Uploading pasted image${files.length > 1 ? 's' : ''}...`, 'info', { duration: 0 });
+        if (accepted.length) {
+            progress = toast(`Uploading pasted image${accepted.length > 1 ? 's' : ''}...`, 'info', { duration: 0 });
             const urls = [];
-            for (const f of files) urls.push(await uploadEditorImageToR2(f, password));
+            for (const f of accepted) {
+                try { urls.push(await uploadEditorImageToR2(f, password)); }
+                catch (e) {
+                    if (String(e.message).includes('413')) {
+                        toast(`Vercel rejected ${f.name} — file too large for upload (~3.3 MB raw limit).`, 'error', { duration: 8000 });
+                    } else { throw e; }
+                }
+            }
             for (const u of urls) insertImageAtCursor(quill, u);
         }
         if (hasInlineBase64) {
