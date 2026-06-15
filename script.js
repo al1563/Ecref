@@ -2046,10 +2046,14 @@ function renderEditorImages() {
     }).join('');
 }
 
-// Vercel's platform request-body limit is 4.5 MB. Base64 encoding bloats
-// binary by ~33%, so the practical raw-file ceiling is ~3.3 MB. Anything
-// larger gets rejected with FUNCTION_PAYLOAD_TOO_LARGE before our code runs.
-const MAX_UPLOAD_BYTES = 3_300_000;
+// Vercel's platform request-body limit is 4.5 MB. Base64 inflates by ~33%,
+// so the practical raw-file ceiling for the JSON /api/upload-image path is
+// ~3.3 MB. For larger files we fall back to:
+//   1) client-side compression (re-encode to JPEG, cap dimension)
+//   2) if still too big, a presigned PUT straight to R2 (bypasses Vercel)
+const MAX_INLINE_UPLOAD_BYTES = 3_300_000;
+const COMPRESS_MAX_DIM = 1920;          // 1920px on the long edge — plenty for clinical images
+const COMPRESS_JPEG_QUALITY = 0.85;
 
 function isUnsupportedImageType(file) {
     const name = (file.name || '').toLowerCase();
@@ -2064,12 +2068,92 @@ function imageUploadPrecheck(file) {
              + 'Convert to JPEG or PNG first: Preview → File → Export As → JPEG, '
              + 'or right-click the file in Finder → Quick Actions → Convert Image.';
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
-        const mb = (file.size / 1024 / 1024).toFixed(1);
-        return `Image is ${mb} MB — too large to upload (limit ~3.3 MB raw, ~4.5 MB after encoding). `
-             + 'Compress it in Preview (Tools → Adjust Size, or Export As JPEG with lower quality) and try again.';
-    }
     return null;
+}
+
+// Re-encode an image to JPEG via canvas, capping the long edge at maxDim.
+// Returns a new File or the original if compression didn't help (or failed).
+async function compressImageIfNeeded(file) {
+    if (file.size <= MAX_INLINE_UPLOAD_BYTES) return file;
+    if (!file.type.startsWith('image/')) return file;
+    try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, COMPRESS_MAX_DIM / Math.max(bitmap.width, bitmap.height));
+        const w = Math.round(bitmap.width * scale);
+        const h = Math.round(bitmap.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        // White backdrop so transparent PNGs don't go black when re-encoded as JPEG.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        bitmap.close && bitmap.close();
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', COMPRESS_JPEG_QUALITY));
+        if (!blob || blob.size >= file.size) return file;   // compression made it bigger — keep original
+        const baseName = (file.name || 'image').replace(/\.[^.]+$/, '');
+        return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    } catch (e) {
+        console.warn('compressImageIfNeeded failed; uploading original', e);
+        return file;
+    }
+}
+
+// Smart upload: pick the right pipeline for the file size.
+//   ≤ 3.3 MB raw            → POST /api/upload-image (single round-trip)
+//   3.3 MB – ~10 MB         → compress to JPEG, re-check size, then either path
+//   still > 3.3 MB          → presigned PUT direct to R2 (bypasses Vercel)
+// Returns the public URL of the uploaded image.
+async function uploadImageSmart(originalFile, password) {
+    let file = originalFile;
+    if (file.size > MAX_INLINE_UPLOAD_BYTES) {
+        file = await compressImageIfNeeded(file);
+    }
+    if (file.size <= MAX_INLINE_UPLOAD_BYTES) {
+        return await uploadImageInline(file, password);
+    }
+    return await uploadImageViaPresign(file, password);
+}
+
+async function uploadImageInline(file, password) {
+    const b64 = await fileToB64(file);
+    const r = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentB64: b64, contentType: file.type }),
+    });
+    if (r.status === 503) throw new Error('R2 not configured on the server');
+    if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${r.status}`);
+    }
+    return (await r.json()).url;
+}
+
+async function uploadImageViaPresign(file, password) {
+    // 1) Ask our function for a presigned URL.
+    const presignRes = await fetch('/api/presign-upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+    });
+    if (presignRes.status === 503) throw new Error('R2 not configured on the server');
+    if (!presignRes.ok) {
+        const j = await presignRes.json().catch(() => ({}));
+        throw new Error(j.error || `presign HTTP ${presignRes.status}`);
+    }
+    const { uploadUrl, publicUrl } = await presignRes.json();
+    // 2) PUT bytes straight to R2. The browser must be allowed via the
+    // bucket's CORS config (one-time setup; see README).
+    const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+    });
+    if (!putRes.ok) {
+        throw new Error(`R2 PUT failed (HTTP ${putRes.status}). If this says CORS or 403, the R2 bucket needs CORS allowing PUT from this origin.`);
+    }
+    return publicUrl;
 }
 
 async function handleImageFiles(files) {
@@ -2082,52 +2166,30 @@ async function handleImageFiles(files) {
             continue;
         }
 
-        // API mode: try R2 upload first (instant). Fall back to GitHub queue if it fails.
+        // API mode: smart-upload (compress + presigned PUT for big files).
         if (EDITOR_STATE.mode === 'api' && EDITOR_STATE.apiPassword) {
             const placeholderPath = `uploading:${file.name}-${Date.now()}`;
             EDITOR_STATE.images.push(placeholderPath);
             renderEditorImages();
+            let progressToast;
+            if (file.size > MAX_INLINE_UPLOAD_BYTES) {
+                progressToast = toast(`Compressing & uploading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)...`, 'info', { duration: 0 });
+            }
             try {
-                const b64 = await fileToB64(file);
-                const r = await fetch('/api/upload-image', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${EDITOR_STATE.apiPassword}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        filename: file.name,
-                        contentB64: b64,
-                        contentType: file.type,
-                    }),
-                });
-                if (r.status === 503) {
-                    // R2 not configured on the server — surface this loudly so the
-                    // user knows why image upload is silently queueing for GitHub.
-                    EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
-                    toast('R2 not configured on the server (check /api/health). Image queued for GitHub commit instead.', 'error', { duration: 8000 });
-                    await queueImageForGithub(file);
-                    continue;
-                }
-                if (r.status === 413) {
-                    EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
-                    renderEditorImages();
-                    const mb = (file.size / 1024 / 1024).toFixed(1);
-                    toast(`Vercel rejected the upload (${mb} MB raw, exceeds 4.5 MB after encoding). Compress the image and try again.`, 'error', { duration: 8000 });
-                    continue;
-                }
-                if (!r.ok) {
-                    const j = await r.json().catch(() => ({}));
-                    throw new Error(j.error || `HTTP ${r.status}`);
-                }
-                const { url } = await r.json();
-                // Replace placeholder with real URL
+                const url = await uploadImageSmart(file, EDITOR_STATE.apiPassword);
                 EDITOR_STATE.images = EDITOR_STATE.images.map(p => p === placeholderPath ? url : p);
                 renderEditorImages();
             } catch (e) {
                 EDITOR_STATE.images = EDITOR_STATE.images.filter(p => p !== placeholderPath);
                 renderEditorImages();
-                toast(`Image upload failed: ${e.message}`, 'error', { duration: 5000 });
+                if (String(e.message).includes('R2 not configured')) {
+                    toast('R2 not configured on the server. Image queued for GitHub commit instead.', 'error', { duration: 8000 });
+                    await queueImageForGithub(file);
+                } else {
+                    toast(`Image upload failed: ${e.message}`, 'error', { duration: 6000 });
+                }
+            } finally {
+                if (progressToast && typeof progressToast.hide === 'function') progressToast.hide();
             }
         } else {
             // GitHub mode (or API mode with no R2): queue for the GitHub commit at save
@@ -3996,11 +4058,9 @@ async function handleEditorImagePaste(quill, event, isDrop) {
             progress = toast(`Uploading pasted image${accepted.length > 1 ? 's' : ''}...`, 'info', { duration: 0 });
             const urls = [];
             for (const f of accepted) {
-                try { urls.push(await uploadEditorImageToR2(f, password)); }
+                try { urls.push(await uploadImageSmart(f, password)); }
                 catch (e) {
-                    if (String(e.message).includes('413')) {
-                        toast(`Vercel rejected ${f.name} — file too large for upload (~3.3 MB raw limit).`, 'error', { duration: 8000 });
-                    } else { throw e; }
+                    toast(`Upload failed for ${f.name || 'pasted image'}: ${e.message}`, 'error', { duration: 6000 });
                 }
             }
             for (const u of urls) insertImageAtCursor(quill, u);
@@ -4020,25 +4080,10 @@ async function handleEditorImagePaste(quill, event, isDrop) {
     }
 }
 
-async function uploadEditorImageToR2(file, password) {
-    const b64 = await fileToB64(file);
-    const ext = (file.type.split('/')[1] || 'png').split(';')[0];
-    const filename = file.name || `pasted-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`;
-    const r = await fetch('/api/upload-image', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, contentB64: b64, contentType: file.type }),
-    });
-    if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${r.status}`);
-    }
-    return (await r.json()).url;
-}
-
 // Rewrite every <img src="data:image/...;base64,...">  in a chunk of HTML
-// to a hotlinkable R2 URL. Uploads sequentially to keep ordering simple.
-// Failures fall back to leaving the original src (caller will sanitize).
+// to a hotlinkable R2 URL. Routes through uploadImageSmart so big inline
+// images also get compressed or sent via presigned PUT. Failures fall back
+// to leaving the original src (caller will sanitize).
 async function rewriteDataUrisInHtml(html, password) {
     const re = /(<img\b[^>]*\bsrc\s*=\s*["'])data:image\/([a-z0-9+.\-]+);base64,([^"']+)(["'])/gi;
     const matches = [...html.matchAll(re)];
@@ -4048,17 +4093,12 @@ async function rewriteDataUrisInHtml(html, password) {
         const ext = m[2].toLowerCase();
         const b64 = m[3].replace(/\s+/g, '');
         try {
-            const r = await fetch('/api/upload-image', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${password}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filename: `pasted-html-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`,
-                    contentB64: b64,
-                    contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-                }),
-            });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            replacements.push((await r.json()).url);
+            const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+            const mime = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+            const file = new File([bytes],
+                `pasted-html-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`,
+                { type: mime });
+            replacements.push(await uploadImageSmart(file, password));
         } catch (e) {
             console.warn('rewriteDataUrisInHtml: upload failed, leaving original', e);
             replacements.push(null);
